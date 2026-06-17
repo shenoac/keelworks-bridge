@@ -1,10 +1,11 @@
 "use client";
-import { useState, useEffect } from "react";
+
+import { Suspense, useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import "./login.css";
 
-export default function LoginPage() {
+function LoginContent() {
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const router = useRouter();
@@ -13,7 +14,10 @@ export default function LoginPage() {
 
   useEffect(() => {
     const checkSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
       const redirectTo = searchParams.get("redirect") || "/queue";
 
       if (session) {
@@ -21,8 +25,10 @@ export default function LoginPage() {
           router.push(redirectTo);
         }
       }
+
       setSessionChecked(true);
     };
+
     checkSession();
   }, [router, searchParams]);
 
@@ -80,5 +86,13 @@ export default function LoginPage() {
         </button>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <LoginContent />
+    </Suspense>
   );
 }
