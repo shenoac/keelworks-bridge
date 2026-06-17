@@ -1,11 +1,16 @@
-import { supabase } from "@/lib/supabaseClient";
+import { createClient } from "@supabase/supabase-js";
+
+const supabaseAdmin = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+);
 
 export async function POST(req: Request) {
   const body = await req.json();
 
   console.log("Received form submission:", body);
 
-  const { data: project, error: projectError } = await supabase
+  const { data: project, error: projectError } = await supabaseAdmin
     .from("projects")
     .select("id")
     .eq("name", body.project_name)
@@ -18,7 +23,7 @@ export async function POST(req: Request) {
     );
   }
 
-  const { error: insertError } = await supabase
+  const { error: insertError } = await supabaseAdmin
     .from("requests")
     .insert({
       project_id: project.id,
