@@ -28,7 +28,7 @@ export async function POST(req: Request) {
     .insert({
       project_id: project.id,
       owner: body.owner,
-      status: body.status || "matching",
+      status: body.status || "new request",
     });
 
   if (insertError) {
