@@ -48,26 +48,68 @@ function LoginContent() {
 
   if (!sessionChecked) return null;
 
-  return (
-    <div className="page-center">
-      <div className="navbar">
-        <img src="/image_1.png" alt="Logo" className="logo-top" />
-        <div className="nav-right">
-          <a href="https://sites.google.com/keelworks.org/keelworks-foundation/home">Home</a>
-          <a href="https://sites.google.com/keelworks.org/keelworks-foundation/about-us">About</a>
-          <a href="https://sites.google.com/keelworks.org/keelworks-foundation/portal">Portal</a>
-          <a href="https://sites.google.com/keelworks.org/keelworks-foundation/resources">Resources</a>
-        </div>
-      </div>
+return (
+  <main
+    style={{
+      minHeight: "100vh",
+      display: "flex",
+      justifyContent: "center",
+      alignItems: "center",
+      backgroundColor: "#f5f5f5",
+    }}
+  >
+    <div
+      style={{
+        width: "100%",
+        maxWidth: "420px",
+        backgroundColor: "white",
+        padding: "40px",
+        borderRadius: "12px",
+        boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+        textAlign: "center",
+      }}
+    >
+      <img
+        src="/image_1.png"
+        alt="Keelworks"
+        style={{
+          width: "120px",
+          marginBottom: "24px",
+        }}
+      />
 
-      <div className="login-container">
-        <h1>Login</h1>
-        <button onClick={handleLogin} disabled={loading}>
-          {loading ? "Redirecting..." : "Continue with Google"}
-        </button>
-      </div>
+      <h1 style={{ marginBottom: "12px" }}>
+        Keelworks Bridge
+      </h1>
+
+      <p
+        style={{
+          color: "#666",
+          marginBottom: "32px",
+        }}
+      >
+        Connect projects with volunteer developers.
+      </p>
+
+      <button
+        onClick={handleLogin}
+        disabled={loading}
+        style={{
+          width: "100%",
+          padding: "12px",
+          borderRadius: "8px",
+          border: "none",
+          cursor: "pointer",
+          fontSize: "16px",
+        }}
+      >
+        {loading
+          ? "Redirecting..."
+          : "Continue with Google"}
+      </button>
     </div>
-  );
+  </main>
+);
 }
 
 export default function LoginPage() {
