@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 
 type PublicRequestRow = {
@@ -9,12 +10,13 @@ type PublicRequestRow = {
   owner: string | null;
   title: string;
   status: string;
-  target_start_date: string | null; // YYYY-MM-DD
-  created_at: string; // ISO
+  target_start_date: string | null;
+  created_at: string;
 };
 
 function formatDate(iso: string) {
   const d = new Date(iso);
+
   return new Intl.DateTimeFormat("en-GB", {
     year: "numeric",
     month: "short",
@@ -23,14 +25,32 @@ function formatDate(iso: string) {
 }
 
 export default function QueuePage() {
+  const router = useRouter();
+
+  const [authChecked, setAuthChecked] = useState(false);
   const [rows, setRows] = useState<PublicRequestRow[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-
   const [statusFilter, setStatusFilter] = useState<string>("all");
 
   useEffect(() => {
-    async function load() {
+    const checkAuthAndLoad = async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!user) {
+        router.push("/login?redirect=/queue");
+        return;
+      }
+
+      if (!user.email?.endsWith("@keelworks.org")) {
+        await supabase.auth.signOut();
+        router.push("/login");
+        return;
+      }
+
+      setAuthChecked(true);
       setLoading(true);
       setError(null);
 
@@ -46,10 +66,10 @@ export default function QueuePage() {
       }
 
       setLoading(false);
-    }
+    };
 
-    load();
-  }, []);
+    checkAuthAndLoad();
+  }, [router]);
 
   const statusOptions = useMemo(() => {
     const set = new Set(rows.map((r) => r.status));
@@ -58,17 +78,24 @@ export default function QueuePage() {
 
   const filtered = useMemo(() => {
     const base = [...rows].sort(
-      (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+      (a, b) =>
+        new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
     );
+
     if (statusFilter === "all") return base;
+
     return base.filter((r) => r.status === statusFilter);
   }, [rows, statusFilter]);
+
+  if (!authChecked) {
+    return null;
+  }
 
   return (
     <main style={{ maxWidth: 1000, margin: "40px auto", padding: 16 }}>
       <h1 style={{ fontSize: 28, fontWeight: 700 }}>Keelworks Bridge — Developer Request Queue</h1>
       <p style={{ opacity: 0.8, marginTop: 6 }}>
-        Public view of all requests, oldest first.
+        Internal view of all requests, oldest first.
       </p>
 
       <div style={{ marginTop: 18, display: "flex", gap: 12, alignItems: "center" }}>
