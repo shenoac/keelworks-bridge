@@ -3,10 +3,8 @@
 import { Suspense, useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
-import "./login.css";
 
 function LoginContent() {
-  const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -32,32 +30,21 @@ function LoginContent() {
     checkSession();
   }, [router, searchParams]);
 
-  const handleLogin = async () => {
-    if (!email.endsWith("@keelworks.org")) {
-      alert("Use company email");
-      return;
-    }
+    const handleLogin = async () => {
+      setLoading(true);
 
-    setLoading(true);
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo: `${location.origin}/queue`,
+    },
+  });
 
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: {
-        emailRedirectTo: `${location.origin}/login?redirect=/queue`,
-      },
-    });
-
+  if (error) {
     setLoading(false);
-
-    if (error) {
-      alert(error.message);
-    } else {
-      alert(
-        "Check your email for the login link. After clicking, you'll be redirected automatically."
-      );
-      setEmail("");
-    }
-  };
+    alert(error.message);
+  }
+};
 
   if (!sessionChecked) return null;
 
@@ -75,14 +62,8 @@ function LoginContent() {
 
       <div className="login-container">
         <h1>Login</h1>
-        <input
-          type="email"
-          placeholder="name@keelworks.org"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-        />
         <button onClick={handleLogin} disabled={loading}>
-          {loading ? "Sending Link..." : "Login with Email"}
+          {loading ? "Redirecting..." : "Continue with Google"}
         </button>
       </div>
     </div>
