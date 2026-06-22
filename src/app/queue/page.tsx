@@ -12,6 +12,7 @@ type PublicRequestRow = {
   status: string;
   target_start_date: string | null;
   created_at: string;
+  developer_names: string | null;
 };
 
 function formatDate(iso: string) {
@@ -126,6 +127,7 @@ export default function QueuePage() {
                 <th style={{ padding: "10px 8px" }}>Request</th>
                 <th style={{ padding: "10px 8px" }}>Status</th>
                 <th style={{ padding: "10px 8px" }}>Owner</th>
+                <th style={{ padding: "10px 8px" }}>Developer</th>
               </tr>
             </thead>
             <tbody>
@@ -144,11 +146,14 @@ export default function QueuePage() {
                   <td style={{ padding: "10px 8px", whiteSpace: "nowrap" }}>
                     {r.owner ?? "—"}
                   </td>
+                  <td style={{ padding: "10px 8px", whiteSpace: "nowrap" }}>
+                    {r.developer_names ?? "—"}
+                  </td>
                 </tr>
               ))}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={5} style={{ padding: "14px 8px", opacity: 0.8 }}>
+                  <td colSpan={6} style={{ padding: "14px 8px", opacity: 0.8 }}>
                     No requests match this filter.
                   </td>
                 </tr>
