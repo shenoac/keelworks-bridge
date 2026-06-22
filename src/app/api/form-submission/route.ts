@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import { title } from "process";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -29,6 +30,7 @@ export async function POST(req: Request) {
       project_id: project.id,
       owner: body.owner,
       status: body.status || "new",
+      title: body.skills,
     });
 
   if (insertError) {
