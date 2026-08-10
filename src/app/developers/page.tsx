@@ -8,7 +8,9 @@ type Developer = {
   id: string;
   full_name: string | null;
   email: string | null;
-  status: string | null;
+  skills: string | null;
+  status: string;
+  project_name: string | null;
 };
 
 export default function DevelopersPage() {
@@ -35,9 +37,10 @@ export default function DevelopersPage() {
       }
 
       const { data, error } = await supabase
-        .from("developers")
-        .select("id, full_name, email, status")
-        .order("status");
+        .from("developer_overview")
+        .select("id, full_name, email,skills, status, project_name")
+        .order("status")
+        .order("full_name");
 
       if (error) {
         console.error("Failed to load developers:", error);
@@ -65,7 +68,9 @@ export default function DevelopersPage() {
             <tr>
               <th className="px-4 py-3">Name</th>
               <th className="px-4 py-3">Email</th>
+              <th className="px-4 py-3">Skills</th>
               <th className="px-4 py-3">Status</th>
+              <th className="px-4 py-3">Project</th>
             </tr>
           </thead>
 
@@ -79,14 +84,20 @@ export default function DevelopersPage() {
                   {developer.email ?? "—"}
                 </td>
                 <td className="px-4 py-3">
+                  {developer.skills ?? "—"}
+                </td>
+                <td className="px-4 py-3">
                   {developer.status ?? "—"}
+                </td>
+                <td className="px-4 py-3">
+                  {developer.project_name ?? "—"}
                 </td>
               </tr>
             ))}
 
             {developers.length === 0 && (
               <tr>
-                <td colSpan={3} className="px-4 py-8 text-center text-gray-500">
+                <td colSpan={5} className="px-4 py-8 text-center text-gray-500">
                   No developers found.
                 </td>
               </tr>
