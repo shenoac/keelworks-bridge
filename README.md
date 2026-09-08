@@ -64,7 +64,7 @@ SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
 1. Log in to your [Supabase dashboard](https://app.supabase.com)
 2. Select your project (or create a new one)
 3. Go to **Settings → API**
-4. Copy your **Project URL** and **anon key**
+4. Copy your **Project URL** and **publishable key**
 5. Paste these values into your `.env.local` file
 
 **Note:** The `NEXT_PUBLIC_` prefix makes these variables accessible in the browser. Never commit `.env.local` to version control.

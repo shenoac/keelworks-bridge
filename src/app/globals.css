@@ -107,7 +107,7 @@ body {
 .dark .theme-toggle:hover { background: #334155; }
 
 .page-center {
-  min-height: 100vh;
+  min-height: calc(100vh - 5.5rem);
   display: flex;
   align-items: center;
   justify-content: center;
