@@ -55,7 +55,8 @@ Or manually create `.env.local` with the following variables:
 
 ```env
 NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=your_supabase_publishable_key
+SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
 ```
 
 #### Getting Supabase Credentials
@@ -67,6 +68,7 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
 5. Paste these values into your `.env.local` file
 
 **Note:** The `NEXT_PUBLIC_` prefix makes these variables accessible in the browser. Never commit `.env.local` to version control.
+Keep `SUPABASE_SERVICE_ROLE_KEY` server-only; never expose it to browser code or commit it to version control.
 
 ## Development
 

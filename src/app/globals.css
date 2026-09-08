@@ -106,6 +106,110 @@ body {
 
 .dark .theme-toggle:hover { background: #334155; }
 
+.page-center {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem 1.5rem;
+  position: relative;
+  overflow: hidden;
+  background: #e9eef5 url("https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=1920&q=80") center / cover fixed;
+}
+
+.page-center::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: rgba(4, 10, 20, 0.58);
+}
+
+.login-container {
+  position: relative;
+  z-index: 1;
+  width: min(100%, 31rem);
+  padding: clamp(2rem, 5vw, 3.5rem);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 1.25rem;
+  background: rgba(12, 22, 37, 0.84);
+  box-shadow: 0 1.5rem 4rem rgba(0, 0, 0, 0.35);
+  text-align: center;
+  color: #f8fafc;
+  backdrop-filter: blur(20px);
+}
+
+.brand-mark {
+  display: grid;
+  place-items: center;
+  width: 4.75rem;
+  height: 4.75rem;
+  margin: 0 auto 1.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 1rem;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.brand-mark img { width: 3.2rem; height: auto; }
+.eyebrow { margin: 0 0 0.65rem; color: #8fb5d9; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; }
+.login-container h1 { margin: 0; font-size: clamp(1.7rem, 4vw, 2.25rem); line-height: 1.15; letter-spacing: -0.02em; }
+.login-copy { margin: 1rem auto 1.75rem; max-width: 23rem; color: #c4d0df; line-height: 1.6; }
+
+.login-alert {
+  display: grid;
+  gap: 0.25rem;
+  margin-bottom: 1.25rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid #f39a9a;
+  border-radius: 0.65rem;
+  background: #fff1f1;
+  color: #8b1e1e;
+  font-size: 0.875rem;
+  text-align: left;
+}
+
+.login-alert span { color: #a33b3b; overflow-wrap: anywhere; }
+
+.google-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  width: 100%;
+  min-height: 3.5rem;
+  border: 0;
+  border-radius: 0.7rem;
+  background: #fff;
+  color: #162236;
+  font-size: 1rem;
+  font-weight: 750;
+  cursor: pointer;
+  box-shadow: 0 0.5rem 1.25rem rgba(0, 0, 0, 0.2);
+  transition: transform 160ms ease, box-shadow 160ms ease, background 160ms ease;
+}
+
+.google-btn:hover { background: #f1f5f9; transform: translateY(-2px); box-shadow: 0 0.75rem 1.5rem rgba(0, 0, 0, 0.28); }
+.google-btn:active { transform: translateY(0); }
+.google-btn:disabled { cursor: wait; opacity: 0.72; transform: none; }
+.google-icon { display: grid; place-items: center; width: 1.5rem; height: 1.5rem; border: 2px solid #4285f4; border-radius: 50%; color: #4285f4; font-size: 0.9rem; font-weight: 800; }
+.access-note { margin: 1.25rem 0 0; color: #91a2b6; font-size: 0.8rem; }
+.google-btn:focus-visible { outline: 3px solid #8bc5ff; outline-offset: 4px; }
+
+@media (max-width: 520px) {
+  .page-center { padding-right: 1rem; padding-left: 1rem; }
+  .login-container { padding: 2rem 1.25rem; }
+}
+
+@media (prefers-color-scheme: light) {
+  .page-center::before { background: rgba(9, 27, 49, 0.46); }
+}
+
+:root:not(.dark) .page-center::before { background: rgba(255, 255, 255, 0.4); }
+:root:not(.dark) .login-container { border-color: rgba(255, 255, 255, 0.65); background: rgba(255, 255, 255, 0.9); color: #0f172a; }
+:root:not(.dark) .brand-mark { border-color: #dbe4ef; background: #f8fafc; }
+:root:not(.dark) .eyebrow { color: #2563a8; }
+:root:not(.dark) .login-copy { color: #475569; }
+:root:not(.dark) .access-note { color: #64748b; }
+
 @media (max-width: 520px) {
   .site-navbar { padding-right: 1rem; padding-left: 1rem; }
   .site-nav-links { gap: 0.75rem; }

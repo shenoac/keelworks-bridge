@@ -4,7 +4,14 @@ import { Suspense, useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
 import { supabase } from "@/lib/supabaseClient";
-import "./login.css";
+
+function getRedirectPath(searchParams: URLSearchParams) {
+  const redirectParam = searchParams.get("redirect");
+
+  return redirectParam?.startsWith("/") && !redirectParam.startsWith("//")
+    ? redirectParam
+    : "/queue";
+}
 
 function LoginContent() {
   const [loading, setLoading] = useState(false);
@@ -22,12 +29,10 @@ function LoginContent() {
 
       if (sessionError) setError(sessionError.message);
 
-      const redirectTo = searchParams.get("redirect") || "/queue";
+      const redirectTo = getRedirectPath(searchParams);
 
       if (session) {
-        if (searchParams.has("redirect")) {
-          router.push(redirectTo);
-        }
+        router.replace(redirectTo);
       }
 
       setSessionChecked(true);
@@ -40,7 +45,7 @@ function LoginContent() {
     setLoading(true);
     setError(null);
 
-    const redirectTo = searchParams.get("redirect") || "/queue";
+    const redirectTo = getRedirectPath(searchParams);
     const { error: signInError } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {

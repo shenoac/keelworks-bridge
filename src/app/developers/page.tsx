@@ -13,6 +13,10 @@ type Developer = {
   project_name: string | null;
 };
 
+function formatSkills(skills: Developer["skills"]) {
+  return Array.isArray(skills) ? skills.join(", ") : skills || "Not provided";
+}
+
 export default function DevelopersPage() {
   const router = useRouter();
 
@@ -241,7 +245,7 @@ export default function DevelopersPage() {
               <tr key={developer.id} className="border-b border-slate-100 last:border-b-0 hover:bg-slate-50/70 dark:border-slate-800 dark:hover:bg-slate-800/60">
                 <td className="px-5 py-4 font-medium text-slate-950 dark:text-white">{developer.full_name ?? "Unknown developer"}</td>
                 <td className="px-5 py-4 text-sm text-slate-600 dark:text-slate-300">{developer.email ?? "Not provided"}</td>
-                <td className="max-w-xs px-5 py-4 text-sm text-slate-600 dark:text-slate-300">{developer.skills ?? "Not provided"}</td>
+                <td className="max-w-xs px-5 py-4 text-sm text-slate-600 dark:text-slate-300">{formatSkills(developer.skills)}</td>
                 <td className="px-5 py-4 text-sm text-slate-600 dark:text-slate-300">{developer.project_name ?? "Unassigned"}</td>
                 <td className="px-5 py-4">
                   <span className="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700 dark:bg-slate-800 dark:text-slate-200">
@@ -299,7 +303,7 @@ export default function DevelopersPage() {
             </div>
             <dl className="mt-6 grid gap-4 text-sm">
               <div><dt className="font-medium text-slate-500 dark:text-slate-400">Email</dt><dd className="mt-1 text-slate-950 dark:text-white">{selectedDeveloper.email ?? "Not provided"}</dd></div>
-              <div><dt className="font-medium text-slate-500 dark:text-slate-400">Skills</dt><dd className="mt-1 text-slate-950 dark:text-white">{selectedDeveloper.skills ?? "Not provided"}</dd></div>
+              <div><dt className="font-medium text-slate-500 dark:text-slate-400">Skills</dt><dd className="mt-1 text-slate-950 dark:text-white">{formatSkills(selectedDeveloper.skills)}</dd></div>
               <div><dt className="font-medium text-slate-500 dark:text-slate-400">Project</dt><dd className="mt-1 text-slate-950 dark:text-white">{selectedDeveloper.project_name ?? "Unassigned"}</dd></div>
               <div><dt className="font-medium text-slate-500 dark:text-slate-400">Status</dt><dd className="mt-1 text-slate-950 dark:text-white">{selectedDeveloper.status ?? "Unknown"}</dd></div>
             </dl>
