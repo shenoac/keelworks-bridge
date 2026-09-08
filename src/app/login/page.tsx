@@ -2,26 +2,37 @@
 
 import { Suspense, useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import Image from "next/image";
 import { supabase } from "@/lib/supabaseClient";
+
+function getRedirectPath(searchParams: URLSearchParams) {
+  const redirectParam = searchParams.get("redirect");
+
+  return redirectParam?.startsWith("/") && !redirectParam.startsWith("//")
+    ? redirectParam
+    : "/queue";
+}
 
 function LoginContent() {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
   const searchParams = useSearchParams();
   const [sessionChecked, setSessionChecked] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const checkSession = async () => {
       const {
         data: { session },
+        error: sessionError,
       } = await supabase.auth.getSession();
 
-      const redirectTo = searchParams.get("redirect") || "/queue";
+      if (sessionError) setError(sessionError.message);
+
+      const redirectTo = getRedirectPath(searchParams);
 
       if (session) {
-        if (searchParams.has("redirect")) {
-          router.push(redirectTo);
-        }
+        router.replace(redirectTo);
       }
 
       setSessionChecked(true);
@@ -30,86 +41,53 @@ function LoginContent() {
     checkSession();
   }, [router, searchParams]);
 
-    const handleLogin = async () => {
-      setLoading(true);
+  const handleLogin = async () => {
+    setLoading(true);
+    setError(null);
 
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: "google",
-        options: {
-          redirectTo: `${location.origin}/queue`,
-    },
-  });
+    const redirectTo = getRedirectPath(searchParams);
+    const { error: signInError } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: `${location.origin}${redirectTo}`,
+      },
+    });
 
-  if (error) {
-    setLoading(false);
-    alert(error.message);
-  }
-};
+    if (signInError) {
+      setLoading(false);
+      setError(signInError.message);
+    }
+  };
 
   if (!sessionChecked) return null;
 
-return (
-  <main
-    style={{
-      minHeight: "100vh",
-      display: "flex",
-      justifyContent: "center",
-      alignItems: "center",
-      backgroundColor: "#f5f5f5",
-    }}
-  >
-    <div
-      style={{
-        width: "100%",
-        maxWidth: "420px",
-        backgroundColor: "white",
-        padding: "40px",
-        borderRadius: "12px",
-        boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-        textAlign: "center",
-      }}
-    >
-      <img
-        src="/image_1.png"
-        alt="Keelworks"
-        style={{
-          width: "120px",
-          marginBottom: "24px",
-        }}
-      />
+  return (
+    <main className="page-center">
+      <section className="login-container" aria-labelledby="login-title">
+        <div className="brand-mark">
+          <Image src="/image_1.png" alt="" width={64} height={64} priority />
+        </div>
+        <p className="eyebrow">Internal workspace</p>
+        <h1 id="login-title">Welcome to Keelworks Bridge</h1>
+        <p className="login-copy">
+          Connect meaningful projects with the people who can move them forward.
+        </p>
 
-      <h1 style={{ marginBottom: "12px" }}>
-        Keelworks Bridge
-      </h1>
+        {error && (
+          <div className="login-alert" role="alert">
+            <strong>Unable to sign you in</strong>
+            <span>{error}</span>
+          </div>
+        )}
 
-      <p
-        style={{
-          color: "#666",
-          marginBottom: "32px",
-        }}
-      >
-        Connect projects with volunteer developers.
-      </p>
-
-      <button
-        onClick={handleLogin}
-        disabled={loading}
-        style={{
-          width: "100%",
-          padding: "12px",
-          borderRadius: "8px",
-          border: "none",
-          cursor: "pointer",
-          fontSize: "16px",
-        }}
-      >
-        {loading
-          ? "Redirecting..."
-          : "Continue with Google"}
-      </button>
-    </div>
-  </main>
-);
+        <button className="google-btn" onClick={handleLogin} disabled={loading}>
+          <span className="google-icon" aria-hidden="true">G</span>
+          <span>{loading ? "Opening Google..." : "Continue with Google"}</span>
+        </button>
+        <p className="access-note">Use your Keelworks Google account to continue.</p>
+      </section>
+    </main>
+  );
 }
 
 export default function LoginPage() {

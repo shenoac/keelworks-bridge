@@ -50,20 +50,20 @@ export default function Home() {
   }
 
   return (
-    <main style={{ padding: 40, maxWidth: 800, margin: "0 auto" }}>
-      <h1>Keelworks Bridge</h1>
+    <main className="mx-auto max-w-3xl p-6 text-slate-950 dark:text-slate-100 sm:p-10">
+      <h1 className="text-3xl font-semibold text-slate-950 dark:text-white">Keelworks Bridge</h1>
 
       <button
         onClick={addProject}
         disabled={loading}
-        style={{ padding: "10px 14px", border: "1px solid #ccc", borderRadius: 8 }}
+        className="mt-4 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-800 hover:border-slate-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
       >
         {loading ? "Adding..." : "Add sample project"}
       </button>
 
-      {error && <p style={{ color: "red" }}>Error: {error}</p>}
+      {error && <p className="mt-4 text-red-700 dark:text-red-300">Error: {error}</p>}
 
-      <pre style={{ marginTop: 16 }}>
+      <pre className="mt-4 overflow-x-auto rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
         {JSON.stringify(projects, null, 2)}
       </pre>
     </main>
