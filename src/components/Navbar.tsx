@@ -7,13 +7,14 @@ import { supabase } from "@/lib/supabaseClient";
 
 export default function Navbar() {
   const [hasSession, setHasSession] = useState(false);
-  const [isDark, setIsDark] = useState(() => {
-    if (typeof window === "undefined") return false;
+  const [isDark, setIsDark] = useState(false);
 
+  useEffect(() => {
     const savedTheme = window.localStorage.getItem("theme");
-    return savedTheme === "dark" ||
-      (savedTheme !== "light" && window.matchMedia("(prefers-color-scheme: dark)").matches);
-  });
+    const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setIsDark(savedTheme === "dark" || (savedTheme !== "light" && prefersDark));
+  }, []);
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", isDark);
