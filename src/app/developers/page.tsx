@@ -28,6 +28,18 @@ export default function DevelopersPage() {
   const [selectedDeveloper, setSelectedDeveloper] = useState<Developer | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [canDelete, setCanDelete] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [newDeveloper, setNewDeveloper] = useState({
+    full_name: "",
+    email: "",
+    skills: "",
+    location: "",
+    availability_hours: "0",
+    status: "available",
+  });
 
   useEffect(() => {
 
@@ -45,6 +57,18 @@ export default function DevelopersPage() {
         await supabase.auth.signOut();
         router.push("/login");
         return;
+      }
+
+      const { data: sessionData } = await supabase.auth.getSession();
+      const adminResponse = sessionData.session
+        ? await fetch("/api/developers", {
+            headers: { Authorization: `Bearer ${sessionData.session.access_token}` },
+          })
+        : null;
+      if (adminResponse?.ok) {
+        const adminData = await adminResponse.json();
+        setIsAdmin(adminData.isAdmin === true);
+        setCanDelete(adminData.canDelete === true);
       }
 
       const { data, error } = await supabase
@@ -65,6 +89,63 @@ export default function DevelopersPage() {
 
     checkAuthAndLoad();
   }, [router]);
+
+  async function addDeveloper(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setSaving(true);
+    setFormError(null);
+
+    const { data: sessionData } = await supabase.auth.getSession();
+    const response = sessionData.session
+      ? await fetch("/api/developers", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${sessionData.session.access_token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            ...newDeveloper,
+            skills: newDeveloper.skills.split(","),
+          }),
+        })
+      : null;
+    const result = response ? await response.json() : { error: "Your session has expired" };
+
+    if (!response?.ok) {
+      setFormError(result.error ?? "Unable to add developer");
+    } else {
+      setNewDeveloper({ full_name: "", email: "", skills: "", location: "", availability_hours: "0", status: "available" });
+      window.location.reload();
+    }
+
+    setSaving(false);
+  }
+
+  async function deleteDeveloper(developer: Developer) {
+    if (!window.confirm(`Delete ${developer.full_name ?? "this developer"}?`)) return;
+    const { data: sessionData } = await supabase.auth.getSession();
+    if (!sessionData.session) {
+      setError("Your session has expired");
+      return;
+    }
+
+    const response = await fetch("/api/developers", {
+      method: "DELETE",
+      headers: {
+        Authorization: `Bearer ${sessionData.session.access_token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ id: developer.id }),
+    });
+    if (!response.ok) {
+      const result = await response.json();
+      setError(result.error ?? "Unable to delete developer");
+      return;
+    }
+
+    setDevelopers((current) => current.filter((item) => item.id !== developer.id));
+    if (selectedDeveloper?.id === developer.id) setSelectedDeveloper(null);
+  }
 
   const statusOptions = useMemo(
     () => [
@@ -144,6 +225,27 @@ export default function DevelopersPage() {
         <h1 className="mt-1 text-3xl font-semibold tracking-tight text-slate-950 dark:text-white">Developers</h1>
         <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">Find the right specialist for your next project.</p>
       </div>
+
+      {isAdmin && (
+        <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900" aria-labelledby="add-developer-title">
+          <h2 id="add-developer-title" className="text-lg font-semibold text-slate-950 dark:text-white">Add developer</h2>
+          <form className="mt-4 grid gap-4 md:grid-cols-2" onSubmit={addDeveloper}>
+            <input required value={newDeveloper.full_name} onChange={(event) => setNewDeveloper({ ...newDeveloper, full_name: event.target.value })} placeholder="Full name" aria-label="Full name" className="rounded-lg border border-slate-300 px-3 py-2.5 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-white" />
+            <input required type="email" value={newDeveloper.email} onChange={(event) => setNewDeveloper({ ...newDeveloper, email: event.target.value })} placeholder="Email" aria-label="Email" className="rounded-lg border border-slate-300 px-3 py-2.5 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-white" />
+            <input value={newDeveloper.skills} onChange={(event) => setNewDeveloper({ ...newDeveloper, skills: event.target.value })} placeholder="Skills, comma separated" aria-label="Skills" className="rounded-lg border border-slate-300 px-3 py-2.5 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-white" />
+            <input value={newDeveloper.location} onChange={(event) => setNewDeveloper({ ...newDeveloper, location: event.target.value })} placeholder="Location" aria-label="Location" className="rounded-lg border border-slate-300 px-3 py-2.5 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-white" />
+            <input type="number" min="0" value={newDeveloper.availability_hours} onChange={(event) => setNewDeveloper({ ...newDeveloper, availability_hours: event.target.value })} placeholder="Availability hours" aria-label="Availability hours" className="rounded-lg border border-slate-300 px-3 py-2.5 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-white" />
+            <select value={newDeveloper.status} onChange={(event) => setNewDeveloper({ ...newDeveloper, status: event.target.value })} aria-label="Status" className="rounded-lg border border-slate-300 px-3 py-2.5 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+              <option value="available">Available</option>
+              <option value="unavailable">Unavailable</option>
+            </select>
+            <div className="md:col-span-2 flex items-center gap-4">
+              <button type="submit" disabled={saving} className="rounded-lg bg-slate-950 px-4 py-2.5 text-sm font-medium text-white disabled:opacity-60 dark:bg-white dark:text-slate-950">{saving ? "Adding..." : "Add developer"}</button>
+              {formError && <p className="text-sm text-red-700 dark:text-red-300" role="alert">{formError}</p>}
+            </div>
+          </form>
+        </section>
+      )}
 
       <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900" aria-label="Developer filters">
         <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_180px_200px_auto] md:items-end">
@@ -228,7 +330,7 @@ export default function DevelopersPage() {
 
       {!error && developers.length > 0 && (
         <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900">
-          <table className="w-full min-w-[850px] text-left">
+          <table className="w-full min-w-[850px] text-left text-sm">
             <thead className="border-b border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800">
             <tr>
               <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Developer</th>
@@ -253,13 +355,24 @@ export default function DevelopersPage() {
                   </span>
                 </td>
                 <td className="px-5 py-4 text-right">
+                  <div className="flex flex-wrap justify-end gap-2">
                   <button
                     type="button"
                     onClick={() => setSelectedDeveloper(developer)}
-                    className="rounded-lg bg-slate-950 px-3 py-2 text-sm font-medium text-white transition hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2 dark:bg-white dark:text-slate-950 dark:hover:bg-slate-200 dark:focus:ring-slate-500 dark:focus:ring-offset-slate-900"
+                    className="rounded-lg border border-slate-300 px-3 py-2 font-medium text-slate-700 transition hover:border-slate-500 hover:text-slate-950 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2 dark:border-slate-600 dark:text-slate-200 dark:hover:border-slate-400 dark:hover:text-white dark:focus:ring-slate-500 dark:focus:ring-offset-slate-900"
                   >
                     View profile
                   </button>
+                  {canDelete && (
+                    <button
+                      type="button"
+                      onClick={() => deleteDeveloper(developer)}
+                      className="rounded-lg border border-red-300 px-3 py-2 font-medium text-red-700 transition hover:border-red-500 hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-300 focus:ring-offset-2 dark:border-red-800 dark:text-red-300 dark:hover:border-red-600 dark:hover:bg-red-950/40 dark:focus:ring-red-700 dark:focus:ring-offset-slate-900"
+                    >
+                      Delete
+                    </button>
+                  )}
+                  </div>
                 </td>
               </tr>
             ))}

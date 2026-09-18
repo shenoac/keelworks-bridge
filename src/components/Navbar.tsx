@@ -7,6 +7,7 @@ import { supabase } from "@/lib/supabaseClient";
 
 export default function Navbar() {
   const [hasSession, setHasSession] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [isDark, setIsDark] = useState(false);
 
   useEffect(() => {
@@ -21,12 +22,25 @@ export default function Navbar() {
   }, [isDark]);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
+    supabase.auth.getSession().then(async ({ data }) => {
       setHasSession(Boolean(data.session));
+      if (data.session) {
+        const response = await fetch("/api/developers", {
+          headers: { Authorization: `Bearer ${data.session.access_token}` },
+        });
+        if (response.ok) setIsAdmin((await response.json()).isAdmin === true);
+      }
     });
 
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: listener } = supabase.auth.onAuthStateChange(async (_event, session) => {
       setHasSession(Boolean(session));
+      setIsAdmin(false);
+      if (session) {
+        const response = await fetch("/api/developers", {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        });
+        if (response.ok) setIsAdmin((await response.json()).isAdmin === true);
+      }
     });
 
     return () => listener.subscription.unsubscribe();
@@ -45,6 +59,7 @@ export default function Navbar() {
         <Image className="site-logo" src="/image_1.png" alt="Keelworks" width={120} height={40} priority />
       </Link>
       <div className="site-nav-links">
+        {isAdmin && <Link href="/admin">Admin dashboard</Link>}
         <Link href="/developers">Developers</Link>
         <Link href="/queue">Request queue</Link>
         {!hasSession && <Link href="/login">Login</Link>}
