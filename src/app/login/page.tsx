@@ -13,6 +13,20 @@ function getRedirectPath(searchParams: URLSearchParams) {
     : "/queue";
 }
 
+async function getPostLoginPath(redirectPath: string) {
+  const { data } = await supabase.auth.getSession();
+  const accessToken = data.session?.access_token;
+
+  if (!accessToken) return redirectPath;
+
+  const response = await fetch("/api/developers", {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+
+  if (response.ok && (await response.json()).isAdmin === true) return "/admin";
+  return redirectPath;
+}
+
 function LoginContent() {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
@@ -32,7 +46,7 @@ function LoginContent() {
       const redirectTo = getRedirectPath(searchParams);
 
       if (session) {
-        router.replace(redirectTo);
+        router.replace(await getPostLoginPath(redirectTo));
       }
 
       setSessionChecked(true);
@@ -49,7 +63,7 @@ function LoginContent() {
     const { error: signInError } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: `${location.origin}${redirectTo}`,
+        redirectTo: `${location.origin}/login?redirect=${encodeURIComponent(redirectTo)}`,
       },
     });
 

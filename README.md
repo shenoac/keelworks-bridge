@@ -57,6 +57,7 @@ Or manually create `.env.local` with the following variables:
 NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=your_supabase_publishable_key
 SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
+ADMIN_EMAIL=your_admin_email
 ```
 
 #### Getting Supabase Credentials
@@ -68,7 +69,7 @@ SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
 5. Paste these values into your `.env.local` file
 
 **Note:** The `NEXT_PUBLIC_` prefix makes these variables accessible in the browser. Never commit `.env.local` to version control.
-Keep `SUPABASE_SERVICE_ROLE_KEY` server-only; never expose it to browser code or commit it to version control.
+Keep `SUPABASE_SERVICE_ROLE_KEY` and `ADMIN_EMAIL` server-only; never expose them to browser code or commit them to version control. `ADMIN_EMAIL` controls access to the admin dashboard and admin API actions.
 
 ## Development
 
@@ -168,6 +169,7 @@ npm run dev -- -p 3001
 - Verify your `.env.local` file has the correct credentials
 - Check that your Supabase project is active
 - Ensure the `NEXT_PUBLIC_SUPABASE_URL` uses HTTPS
+- The admin dashboard can load with only the public URL/key, but adding or deleting projects and developers also requires `SUPABASE_SERVICE_ROLE_KEY` in the server environment. Add it to `.env` or `.env.local`, then restart `npm run dev`.
 - Clear the `.next` cache: `rm -rf .next` then rebuild
 
 ### Dependency Issues
