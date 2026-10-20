@@ -82,6 +82,15 @@ The main data entities referenced by the app are `projects`, `developers`, `requ
 - Made the server-side Supabase client lazy so builds do not require `SUPABASE_SERVICE_ROLE_KEY` at module import time.
 - Added `.env.example` and documented the server-only service-role key.
 
+### 2026-10-20: Schema alignment, idle days & auth enforcement
+
+- **Production authentication enforcement**: Restriced interactive demo mode to development and preview environments (`process.env.NODE_ENV !== "production"` or `NEXT_PUBLIC_VERCEL_ENV === "preview"`). In production, unauthenticated users are redirected to `/login` and demo mode/sample data fallback is never activated.
+- **Dynamic idle days calculation**: Updated idle days calculation to compute from the date the developer most recently became available (e.g. from the most recent project assignment `end_date`, or `available_from`, falling back to `joined_at`/`created_at`). This ensures developers returning from project assignments start at 0 idle days.
+- **Supabase schema alignment & migrations**:
+  - Aligned the developer page to function on both the existing schema (where `developer_overview` only contains `id, full_name, email, skills, status, project_name` and `developers` contains `location, availability_hours, created_at`) and the upgraded schema.
+  - Added schema migration in `supabase/migrations/20261020000000_update_developers_and_developer_overview.sql` to add `joined_at` and `available_from` columns to `developers` table and recreate `developer_overview` view with dynamic availability tracking.
+  - Handled `POST /api/developers` graceful fallback when `joined_at` does not yet exist on `developers` table.
+
 ## Current Local Feature: Admin Management
 
 The uncommitted changes add admin-only create/delete workflows for developers and projects.
