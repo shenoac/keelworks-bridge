@@ -71,6 +71,13 @@ ADMIN_EMAIL=your_admin_email
 **Note:** The `NEXT_PUBLIC_` prefix makes these variables accessible in the browser. Never commit `.env.local` to version control.
 Keep `SUPABASE_SERVICE_ROLE_KEY` and `ADMIN_EMAIL` server-only; never expose them to browser code or commit them to version control. `ADMIN_EMAIL` controls access to the admin dashboard and admin API actions.
 
+### 4. Database Migrations
+
+SQL migrations are provided in `supabase/migrations/`.
+To apply the developer directory schema alignment and idle days tracking updates, execute the migration in `supabase/migrations/20261020000000_update_developers_and_developer_overview.sql` in your Supabase SQL Editor:
+- Adds `joined_at` and `available_from` columns to `developers` table with default and backfill.
+- Updates `developer_overview` view to dynamically resolve the date developers became available (from ended project assignments) and include location, availability hours, and join dates.
+
 ## Development
 
 ### Start the Development Server

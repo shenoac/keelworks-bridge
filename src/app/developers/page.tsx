@@ -1,135 +1,24 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
-
-type Developer = {
-  id: string;
-  full_name: string | null;
-  email: string | null;
-  skills: string | string[] | null;
-  status: string;
-  project_name: string | null;
-  joined_at?: string | null;
-  created_at?: string | null;
-  location?: string | null;
-  availability_hours?: number | null;
-};
-
-interface EnrichedDeveloper extends Developer {
-  joinedDate: Date | null;
-  idleDays: number | null;
-  isAvailableForAllocation: boolean;
-  allocationPriority?: number;
-}
-
-// Built-in sample developers for local testing when Supabase is not connected
-const SAMPLE_DEVELOPERS: Developer[] = [
-  {
-    id: "dev-1",
-    full_name: "Alex Rivera",
-    email: "alex.rivera@keelworks.org",
-    skills: ["React", "TypeScript", "Next.js", "Node.js"],
-    status: "available",
-    project_name: null,
-    joined_at: new Date(Date.now() - 48 * 86400000).toISOString(),
-    location: "Seattle, WA",
-    availability_hours: 40,
-  },
-  {
-    id: "dev-2",
-    full_name: "Priya Sharma",
-    email: "priya.sharma@keelworks.org",
-    skills: ["Python", "FastAPI", "PostgreSQL", "AI/ML"],
-    status: "available",
-    project_name: null,
-    joined_at: new Date(Date.now() - 32 * 86400000).toISOString(),
-    location: "Austin, TX",
-    availability_hours: 35,
-  },
-  {
-    id: "dev-3",
-    full_name: "Marcus Vance",
-    email: "marcus.vance@keelworks.org",
-    skills: ["UI/UX", "TailwindCSS", "Figma", "Frontend"],
-    status: "available",
-    project_name: null,
-    joined_at: new Date(Date.now() - 14 * 86400000).toISOString(),
-    location: "Remote",
-    availability_hours: 20,
-  },
-  {
-    id: "dev-4",
-    full_name: "Elena Rostova",
-    email: "elena.rostova@keelworks.org",
-    skills: ["React", "GraphQL", "Docker"],
-    status: "available",
-    project_name: "Keelworks Portal",
-    joined_at: new Date(Date.now() - 65 * 86400000).toISOString(),
-    location: "Boston, MA",
-    availability_hours: 40,
-  },
-  {
-    id: "dev-5",
-    full_name: "Jordan Lee",
-    email: "jordan.lee@keelworks.org",
-    skills: ["DevOps", "Kubernetes", "AWS", "CI/CD"],
-    status: "unavailable",
-    project_name: null,
-    joined_at: new Date(Date.now() - 90 * 86400000).toISOString(),
-    location: "Chicago, IL",
-    availability_hours: 0,
-  },
-  {
-    id: "dev-6",
-    full_name: "Sofia Mendez",
-    email: "sofia.mendez@keelworks.org",
-    skills: ["Node.js", "Express", "MongoDB", "REST APIs"],
-    status: "available",
-    project_name: null,
-    joined_at: new Date(Date.now() - 7 * 86400000).toISOString(),
-    location: "San Francisco, CA",
-    availability_hours: 30,
-  },
-];
-
-function formatSkills(skills: Developer["skills"]) {
-  return Array.isArray(skills) ? skills.join(", ") : skills || "Not provided";
-}
-
-function getDeveloperJoinedDate(developer: Developer): Date | null {
-  const dateStr = developer.joined_at || developer.created_at;
-  if (!dateStr) return null;
-  const d = new Date(dateStr);
-  return isNaN(d.getTime()) ? null : d;
-}
-
-function calculateIdleDays(developer: Developer): number | null {
-  const isAvailable =
-    developer.status?.toLowerCase() === "available" &&
-    (!developer.project_name || developer.project_name.trim() === "" || developer.project_name.toLowerCase() === "unassigned");
-  if (!isAvailable) return null;
-
-  const joinedDate = getDeveloperJoinedDate(developer);
-  if (!joinedDate) return 0;
-
-  const diffMs = Date.now() - joinedDate.getTime();
-  const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-  return Math.max(0, days);
-}
-
-function formatDisplayDate(dateStr?: string | null): string {
-  if (!dateStr) return "Not specified";
-  const d = new Date(dateStr);
-  if (isNaN(d.getTime())) return dateStr;
-  return new Intl.DateTimeFormat("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  }).format(d);
-}
+import {
+  type Developer,
+  type EnrichedDeveloper,
+  SAMPLE_DEVELOPERS,
+  isDevOrPreviewEnvironment,
+  formatSkills,
+  formatDisplayDate,
+  getDeveloperJoinedDate,
+  getDeveloperAvailableDate,
+  calculateIdleDays,
+  isAvailableForAllocation,
+} from "@/lib/developers";
 
 export default function DevelopersPage() {
+  const router = useRouter();
+
   const [developers, setDevelopers] = useState<Developer[]>([]);
   const [search, setSearch] = useState("");
   const [skillSearch, setSkillSearch] = useState("");
@@ -157,11 +46,28 @@ export default function DevelopersPage() {
 
   useEffect(() => {
     async function loadData() {
+      const isDevOrPreview = isDevOrPreviewEnvironment();
+
       try {
         const {
           data: { user },
         } = await supabase.auth.getUser();
 
+        // Strictly preserve authentication requirements in production
+        if (!isDevOrPreview) {
+          if (!user) {
+            router.push("/login?redirect=/developers");
+            return;
+          }
+
+          if (!user.email?.endsWith("@keelworks.org")) {
+            await supabase.auth.signOut();
+            router.push("/login");
+            return;
+          }
+        }
+
+        // Authenticated user admin privileges verification (both production and dev)
         if (user && user.email?.endsWith("@keelworks.org")) {
           const { data: sessionData } = await supabase.auth.getSession();
           if (sessionData.session) {
@@ -174,10 +80,14 @@ export default function DevelopersPage() {
               setCanDelete(adminData.canDelete === true);
             }
           }
+        }
 
+        // Query data if authenticated or in dev/preview
+        if (user || isDevOrPreview) {
+          // Attempt query on updated developer_overview view (when migration is applied)
           const fullQuery = await supabase
             .from("developer_overview")
-            .select("id, full_name, email, skills, status, project_name, joined_at, created_at, location, availability_hours")
+            .select("id, full_name, email, skills, status, project_name, joined_at, created_at, location, availability_hours, available_from")
             .order("status")
             .order("full_name");
 
@@ -187,23 +97,78 @@ export default function DevelopersPage() {
             return;
           }
 
+          // Fallback to existing database schema:
+          // Queries basic developer_overview and enriches with developers table and project_assignments
           const basicQuery = await supabase
             .from("developer_overview")
             .select("id, full_name, email, skills, status, project_name")
             .order("status")
             .order("full_name");
 
-          if (!basicQuery.error && basicQuery.data && basicQuery.data.length > 0) {
-            setDevelopers(basicQuery.data as Developer[]);
+          if (!basicQuery.error && basicQuery.data) {
+            // Fetch extra columns from developers table (location, availability_hours, created_at)
+            const devTableQuery = await supabase
+              .from("developers")
+              .select("id, location, availability_hours, created_at");
+
+            const devMap = new Map((devTableQuery.data || []).map((d) => [d.id, d]));
+
+            // Fetch ended assignments from project_assignments to determine when developer became available
+            const assignQuery = await supabase
+              .from("project_assignments")
+              .select("developer_id, end_date")
+              .not("end_date", "is", null);
+
+            const latestAssignmentEndMap = new Map<string, string>();
+            (assignQuery.data || []).forEach((a) => {
+              const current = latestAssignmentEndMap.get(a.developer_id);
+              if (!current || new Date(a.end_date) > new Date(current)) {
+                latestAssignmentEndMap.set(a.developer_id, a.end_date);
+              }
+            });
+
+            const mergedDevelopers: Developer[] = basicQuery.data.map((ov) => {
+              const tableDev = devMap.get(ov.id);
+              const lastEndDate = latestAssignmentEndMap.get(ov.id);
+              return {
+                ...ov,
+                location: tableDev?.location ?? null,
+                availability_hours: tableDev?.availability_hours ?? 0,
+                created_at: tableDev?.created_at ?? null,
+                joined_at: tableDev?.created_at ?? null,
+                available_from: lastEndDate ?? tableDev?.created_at ?? null,
+              };
+            });
+
+            setDevelopers(mergedDevelopers);
+            setLoading(false);
+            return;
+          }
+
+          if (!isDevOrPreview && basicQuery.error) {
+            setError(basicQuery.error.message);
             setLoading(false);
             return;
           }
         }
       } catch (err) {
-        console.warn("Supabase connection offline or not logged in, falling back to local preview mode:", err);
+        console.warn("Supabase query error:", err);
+        if (!isDevOrPreview) {
+          setError(err instanceof Error ? err.message : "Failed to load developers");
+          setLoading(false);
+          return;
+        }
       }
 
-      // If offline, placeholder credentials, or no records in DB, provide sample data for local preview
+      // In production, never fall back to demo mode or mock admin permissions
+      if (!isDevOrPreview) {
+        setDevelopers([]);
+        setLoading(false);
+        return;
+      }
+
+      // In development or preview environments ONLY:
+      // Provide interactive sample data fallback for local development & review
       setIsDemoMode(true);
       setIsAdmin(true);
       setCanDelete(true);
@@ -212,7 +177,7 @@ export default function DevelopersPage() {
     }
 
     loadData();
-  }, []);
+  }, [router]);
 
   async function addDeveloper(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -229,6 +194,7 @@ export default function DevelopersPage() {
       status: newDeveloper.status,
       project_name: null,
       joined_at: newDeveloper.joined_at,
+      available_from: newDeveloper.status === "available" ? newDeveloper.joined_at : null,
     };
 
     if (isDemoMode) {
@@ -326,14 +292,14 @@ export default function DevelopersPage() {
     // 1. Enrich with basic computed fields
     const enriched = developers.map((dev) => {
       const joinedDate = getDeveloperJoinedDate(dev);
-      const isAvailable =
-        dev.status?.toLowerCase() === "available" &&
-        (!dev.project_name || dev.project_name.trim() === "" || dev.project_name.toLowerCase() === "unassigned");
+      const availableDate = getDeveloperAvailableDate(dev);
+      const isAvailable = isAvailableForAllocation(dev);
       const idleDays = calculateIdleDays(dev);
 
       return {
         ...dev,
         joinedDate,
+        availableDate,
         idleDays,
         isAvailableForAllocation: isAvailable,
       };
@@ -437,6 +403,16 @@ export default function DevelopersPage() {
       if (sortBy === "idleDaysAsc") {
         return (a.idleDays ?? 999999) - (b.idleDays ?? 999999);
       }
+      if (sortBy === "availableNewest") {
+        const timeA = a.availableDate ? a.availableDate.getTime() : -Infinity;
+        const timeB = b.availableDate ? b.availableDate.getTime() : -Infinity;
+        return timeB - timeA;
+      }
+      if (sortBy === "availableOldest") {
+        const timeA = a.availableDate ? a.availableDate.getTime() : Infinity;
+        const timeB = b.availableDate ? b.availableDate.getTime() : Infinity;
+        return timeA - timeB;
+      }
       if (sortBy === "joinedOldest") {
         const timeA = a.joinedDate ? a.joinedDate.getTime() : Infinity;
         const timeB = b.joinedDate ? b.joinedDate.getTime() : Infinity;
@@ -486,17 +462,17 @@ export default function DevelopersPage() {
 
   return (
     <main className="mx-auto max-w-7xl space-y-6 p-6 text-slate-950 dark:text-slate-100 sm:p-8">
-      {/* Local Preview Mode Banner */}
+      {/* Development Preview Mode Banner */}
       {isDemoMode && (
         <div className="flex items-center justify-between gap-4 rounded-xl border border-sky-200 bg-sky-50/90 px-4 py-3 text-sm text-sky-900 shadow-sm dark:border-sky-900/60 dark:bg-sky-950/40 dark:text-sky-200">
           <div className="flex items-center gap-2.5">
             <span className="flex h-5 w-5 items-center justify-center rounded-full bg-sky-600 text-xs font-bold text-white">ℹ</span>
             <span>
-              <strong>Interactive Preview Mode:</strong> Displaying sample resources with live <strong>Idle Days</strong> and <strong>Allocation Priority</strong> calculations.
+              <strong>Development Preview Mode:</strong> Showing sample developers. Demo mode is restricted to preview/development environments; production strictly requires authentication.
             </span>
           </div>
           <span className="hidden text-xs text-sky-700 dark:text-sky-400 sm:inline">
-            Connect Supabase in <code className="rounded bg-sky-100 px-1 py-0.5 dark:bg-sky-900">.env.local</code> for production data
+            Connect Supabase in <code className="rounded bg-sky-100 px-1 py-0.5 dark:bg-sky-900">.env.local</code> for live data
           </span>
         </div>
       )}
@@ -549,7 +525,7 @@ export default function DevelopersPage() {
                     {dev.full_name ?? "Unknown Developer"}
                   </h3>
                   <p className="text-xs text-slate-500 dark:text-slate-400">
-                    Joined: {formatDisplayDate(dev.joined_at || dev.created_at)}
+                    Available since: {formatDisplayDate(dev.available_from || dev.joined_at || dev.created_at)}
                   </p>
 
                   <div className="mt-3">
@@ -669,15 +645,17 @@ export default function DevelopersPage() {
               <option value="priority">Allocation Priority (Idle Days ↓)</option>
               <option value="idleDaysDesc">Idle Days (High to Low)</option>
               <option value="idleDaysAsc">Idle Days (Low to High)</option>
-              <option value="joinedOldest">Joined Date (Oldest First)</option>
+              <option value="availableNewest">Most Recently Available</option>
+              <option value="availableOldest">Longest Available</option>
               <option value="joinedNewest">Joined Date (Newest First)</option>
+              <option value="joinedOldest">Joined Date (Oldest First)</option>
               <option value="name">Developer Name (A-Z)</option>
               <option value="status">Status</option>
             </select>
           </label>
         </div>
 
-        {/* Quick filter & status */}
+        {/* Quick filter & status count */}
         <div className="mt-4 flex flex-wrap items-center justify-between gap-4 border-t border-slate-100 pt-3 dark:border-slate-800">
           <label className="inline-flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-200 cursor-pointer">
             <input
@@ -726,7 +704,7 @@ export default function DevelopersPage() {
                 <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Developer</th>
                 <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Skills</th>
                 <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Project</th>
-                <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Joined Date</th>
+                <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Became Available</th>
                 <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Idle Days</th>
                 <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Allocation Priority</th>
                 <th className="px-5 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">Action</th>
@@ -750,8 +728,15 @@ export default function DevelopersPage() {
                       </span>
                     )}
                   </td>
-                  <td className="px-5 py-4 text-sm text-slate-600 dark:text-slate-300 whitespace-nowrap">
-                    {formatDisplayDate(developer.joined_at || developer.created_at)}
+                  <td className="px-5 py-4 text-sm whitespace-nowrap">
+                    <div className="font-medium text-slate-900 dark:text-slate-100">
+                      {formatDisplayDate(developer.available_from || developer.joined_at || developer.created_at)}
+                    </div>
+                    {(developer.joined_at || developer.created_at) && (
+                      <div className="text-xs text-slate-500 dark:text-slate-400">
+                        Joined {formatDisplayDate(developer.joined_at || developer.created_at)}
+                      </div>
+                    )}
                   </td>
                   <td className="px-5 py-4 whitespace-nowrap">
                     {developer.idleDays !== null ? (
@@ -854,7 +839,8 @@ export default function DevelopersPage() {
 
             <dl className="mt-5 grid gap-3.5 text-sm">
               <div><dt className="font-medium text-slate-500 dark:text-slate-400">Email</dt><dd className="mt-0.5 text-slate-950 dark:text-white">{selectedDeveloper.email ?? "Not provided"}</dd></div>
-              <div><dt className="font-medium text-slate-500 dark:text-slate-400">Joining Date</dt><dd className="mt-0.5 text-slate-950 dark:text-white">{formatDisplayDate(selectedDeveloper.joined_at || selectedDeveloper.created_at)}</dd></div>
+              <div><dt className="font-medium text-slate-500 dark:text-slate-400">Became Available</dt><dd className="mt-0.5 text-slate-950 dark:text-white">{formatDisplayDate(selectedDeveloper.available_from || selectedDeveloper.joined_at || selectedDeveloper.created_at)}</dd></div>
+              <div><dt className="font-medium text-slate-500 dark:text-slate-400">Original Joining Date</dt><dd className="mt-0.5 text-slate-950 dark:text-white">{formatDisplayDate(selectedDeveloper.joined_at || selectedDeveloper.created_at)}</dd></div>
               <div><dt className="font-medium text-slate-500 dark:text-slate-400">Skills</dt><dd className="mt-0.5 text-slate-950 dark:text-white">{formatSkills(selectedDeveloper.skills)}</dd></div>
               <div><dt className="font-medium text-slate-500 dark:text-slate-400">Project</dt><dd className="mt-0.5 text-slate-950 dark:text-white">{selectedDeveloper.project_name ?? "Unassigned"}</dd></div>
               <div><dt className="font-medium text-slate-500 dark:text-slate-400">Status</dt><dd className="mt-0.5 text-slate-950 dark:text-white">{selectedDeveloper.status ?? "Unknown"}</dd></div>
