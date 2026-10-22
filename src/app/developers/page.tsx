@@ -11,10 +11,32 @@ type Developer = {
   skills: string | string[] | null;
   status: string;
   project_name: string | null;
+  comments?: string | null;
+};
+
+type CommentEntry = {
+  id: string | number;
+  developer_id: string | null;
+  developer_name: string;
+  author: string;
+  comment: string;
+  created_at: string;
 };
 
 function formatSkills(skills: Developer["skills"]) {
   return Array.isArray(skills) ? skills.join(", ") : skills || "Not provided";
+}
+
+function formatCommentTimestamp(dateStr: string): string {
+  const date = new Date(dateStr);
+  if (isNaN(date.getTime())) return dateStr;
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(date);
 }
 
 export default function DevelopersPage() {
@@ -26,12 +48,18 @@ export default function DevelopersPage() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [projectFilter, setProjectFilter] = useState("all");
   const [selectedDeveloper, setSelectedDeveloper] = useState<Developer | null>(null);
+  const [allNotesDeveloperId, setAllNotesDeveloperId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
   const [canDelete, setCanDelete] = useState(false);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const [commentsLoadError, setCommentsLoadError] = useState<string | null>(null);
+  const [commentHistory, setCommentHistory] = useState<Record<string, CommentEntry[]>>({});
+  const [archivedComments, setArchivedComments] = useState<CommentEntry[]>([]);
+  const [commentStatus, setCommentStatus] = useState<{ developerId: string; message: string; isError: boolean } | null>(null);
+  const [savingCommentId, setSavingCommentId] = useState<string | null>(null);
   const [newDeveloper, setNewDeveloper] = useState({
     full_name: "",
     email: "",
@@ -58,17 +86,30 @@ export default function DevelopersPage() {
         router.push("/login");
         return;
       }
-
       const { data: sessionData } = await supabase.auth.getSession();
       const adminResponse = sessionData.session
         ? await fetch("/api/developers", {
             headers: { Authorization: `Bearer ${sessionData.session.access_token}` },
           })
         : null;
+      let isAdminUser = false;
       if (adminResponse?.ok) {
         const adminData = await adminResponse.json();
+        isAdminUser = adminData.isAdmin === true;
         setIsAdmin(adminData.isAdmin === true);
-        setCanDelete(adminData.canDelete === true);
+        setCanDelete(adminData.isAdmin === true);
+      }
+      if (isAdminUser && sessionData.session) {
+      const commentsResponse = await fetch("/api/developers?includeComments=true", {
+              headers: { Authorization: `Bearer ${sessionData.session?.access_token}` },
+            }).catch(() => null);
+            const commentsData = commentsResponse ? await commentsResponse.json() : null;
+            if (!commentsResponse?.ok || commentsData?.commentsError) {
+              setCommentsLoadError(commentsData?.commentsError ?? "Unable to load comment history.");
+            } else {
+              setCommentHistory((commentsData?.comments ?? {}) as Record<string, CommentEntry[]>);
+              setArchivedComments(commentsData?.archivedComments ?? []);
+            }
       }
 
       const { data, error } = await supabase
@@ -81,7 +122,7 @@ export default function DevelopersPage() {
         console.error("Failed to load developers:", error);
         setError(error.message);
       } else {
-        setDevelopers(data ?? []);
+        setDevelopers((data ?? []).map((developer) => ({ ...developer, comments: "" })) as Developer[]);
       }
 
       setLoading(false);
@@ -121,6 +162,56 @@ export default function DevelopersPage() {
     setSaving(false);
   }
 
+  async function saveComments(developer: Developer) {
+    const comments = developer.comments?.trim() ?? "";
+    if (!comments) {
+      setCommentStatus({ developerId: developer.id, message: "Comments cannot be empty.", isError: true });
+      return;
+    }
+
+    setSavingCommentId(developer.id);
+    setCommentStatus(null);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const response = sessionData.session
+        ? await fetch("/api/developers", {
+            method: "PATCH",
+            headers: {
+              Authorization: `Bearer ${sessionData.session.access_token}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ id: developer.id, comments }),
+          })
+        : null;
+      const result: CommentEntry | { error?: string } = response
+        ? await response.json()
+        : { error: "Your session has expired" };
+
+      if (!response?.ok) {
+        setCommentStatus({
+          developerId: developer.id,
+          message: "error" in result ? result.error ?? "Unable to save comments." : "Unable to save comments.",
+          isError: true,
+        });
+      } else {
+        const savedComment = result as CommentEntry;
+        setCommentHistory((current) => ({
+          ...current,
+          [developer.id]: [...(current[developer.id] ?? []), savedComment],
+        }));
+        setDevelopers((current) => current.map((item) => item.id === developer.id ? { ...item, comments: "" } : item));
+        setSelectedDeveloper((current) =>
+          current?.id === developer.id ? { ...current, comments: "" } : current
+        );
+        setCommentStatus({ developerId: developer.id, message: "Saved.", isError: false });
+      }
+    } catch (saveError) {
+      console.error("Failed to save developer comment:", saveError);
+      setCommentStatus({ developerId: developer.id, message: "Network error saving comments.", isError: true });
+    }
+    setSavingCommentId(null);
+  }
+
   async function deleteDeveloper(developer: Developer) {
     if (!window.confirm(`Delete ${developer.full_name ?? "this developer"}?`)) return;
     const { data: sessionData } = await supabase.auth.getSession();
@@ -143,6 +234,14 @@ export default function DevelopersPage() {
       return;
     }
 
+    setArchivedComments((current) => [
+      ...current,
+      ...(commentHistory[developer.id] ?? []).map((entry) => ({
+        ...entry,
+        developer_id: null,
+        developer_name: developer.full_name ?? "Unknown developer",
+      })),
+    ]);
     setDevelopers((current) => current.filter((item) => item.id !== developer.id));
     if (selectedDeveloper?.id === developer.id) setSelectedDeveloper(null);
   }
@@ -322,6 +421,12 @@ export default function DevelopersPage() {
         </div>
       )}
 
+      {isAdmin && commentsLoadError && (
+        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/50 dark:text-red-200" role="alert">
+          Unable to load comment history: {commentsLoadError}
+        </div>
+      )}
+
       {!error && developers.length === 0 && (
         <div className="rounded-xl border border-dashed border-slate-300 px-6 py-12 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">
           No developers found.
@@ -389,13 +494,30 @@ export default function DevelopersPage() {
         </div>
       )}
 
+      {isAdmin && archivedComments.length > 0 && (
+        <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900" aria-labelledby="archived-comments-title">
+          <h2 id="archived-comments-title" className="text-lg font-semibold text-slate-950 dark:text-white">Notes for removed developer records</h2>
+          <ol className="mt-4 space-y-4">
+            {archivedComments.map((entry) => (
+              <li key={entry.id} className="rounded-lg border border-slate-200 p-4 dark:border-slate-700">
+                <p className="font-medium text-slate-900 dark:text-white">{entry.developer_name}</p>
+                <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                  {entry.author} · {formatCommentTimestamp(entry.created_at)}
+                </p>
+                <p className="mt-2 whitespace-pre-wrap break-words text-sm text-slate-700 dark:text-slate-200">{entry.comment}</p>
+              </li>
+            ))}
+          </ol>
+        </section>
+      )}
+
       {selectedDeveloper && (
         <div className="fixed inset-0 z-10 flex items-center justify-center bg-slate-950/40 p-4" role="presentation" onMouseDown={() => setSelectedDeveloper(null)}>
           <section
             role="dialog"
             aria-modal="true"
             aria-labelledby="developer-profile-title"
-            className="w-full max-w-lg rounded-xl bg-white p-6 text-slate-950 shadow-xl dark:bg-slate-900 dark:text-white"
+            className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl bg-white p-6 text-slate-950 shadow-xl dark:bg-slate-900 dark:text-white"
             onMouseDown={(event) => event.stopPropagation()}
           >
             <div className="flex items-start justify-between gap-4">
@@ -420,6 +542,120 @@ export default function DevelopersPage() {
               <div><dt className="font-medium text-slate-500 dark:text-slate-400">Project</dt><dd className="mt-1 text-slate-950 dark:text-white">{selectedDeveloper.project_name ?? "Unassigned"}</dd></div>
               <div><dt className="font-medium text-slate-500 dark:text-slate-400">Status</dt><dd className="mt-1 text-slate-950 dark:text-white">{selectedDeveloper.status ?? "Unknown"}</dd></div>
             </dl>
+            {isAdmin && (
+              <section className="mt-6 border-t border-slate-200 pt-5 dark:border-slate-700" aria-labelledby="private-notes-title">
+                <h3 id="private-notes-title" className="text-lg font-semibold text-slate-950 dark:text-white">Private administrator notes</h3>
+                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Visible only to administrators. Saved notes cannot be edited or deleted.</p>
+                <label className="mt-4 block text-sm font-medium text-slate-700 dark:text-slate-200">
+                  Add a note
+                  <textarea
+                    value={selectedDeveloper.comments ?? ""}
+                    onChange={(event) => setSelectedDeveloper({ ...selectedDeveloper, comments: event.target.value })}
+                    maxLength={5000}
+                    rows={3}
+                    placeholder="Record a follow-up, decision, or engagement update..."
+                    className="mt-2 w-full resize-y rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-950 outline-none focus:border-slate-500 focus:ring-2 focus:ring-slate-200 dark:border-slate-600 dark:bg-slate-800 dark:text-white dark:focus:ring-slate-700"
+                  />
+                </label>
+                <button
+                  type="button"
+                  onClick={() => saveComments(selectedDeveloper)}
+                  disabled={savingCommentId === selectedDeveloper.id || !selectedDeveloper.comments?.trim()}
+                  className="mt-2 rounded-lg bg-slate-950 px-4 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-white dark:text-slate-950"
+                >
+                  {savingCommentId === selectedDeveloper.id ? "Saving..." : "Save note"}
+                </button>
+                {commentStatus?.developerId === selectedDeveloper.id && (
+                  <p className={`mt-2 text-sm ${commentStatus.isError ? "text-red-700 dark:text-red-300" : "text-green-700 dark:text-green-300"}`} role={commentStatus.isError ? "alert" : "status"}>
+                    {commentStatus.message}
+                  </p>
+                )}
+                {(() => {
+                  const notes = commentHistory[selectedDeveloper.id] ?? [];
+                  const recentNotes = notes.slice(-2).reverse();
+                  return (
+                    <>
+                      <div className="mt-5 flex items-center justify-between gap-3">
+                        <h4 className="text-sm font-semibold text-slate-800 dark:text-slate-200">
+                          Recent notes ({notes.length})
+                        </h4>
+                        {notes.length >= 2 && (
+                          <button
+                            type="button"
+                            onClick={() => setAllNotesDeveloperId(selectedDeveloper.id)}
+                            className="text-sm font-medium text-blue-700 underline hover:text-blue-900 dark:text-blue-300 dark:hover:text-blue-100"
+                          >
+                            View all notes
+                          </button>
+                        )}
+                      </div>
+                      <ol className="mt-3 max-h-72 space-y-4 overflow-y-auto">
+                        {notes.length > 0 ? (
+                          recentNotes.map((entry) => (
+                            <li key={entry.id} className="rounded-lg border border-slate-200 p-3 dark:border-slate-700">
+                              <p className="text-xs text-slate-500 dark:text-slate-400">
+                                {entry.author} · <time dateTime={entry.created_at}>{formatCommentTimestamp(entry.created_at)}</time>
+                              </p>
+                              <p className="mt-2 whitespace-pre-wrap break-words text-sm text-slate-800 dark:text-slate-200">{entry.comment}</p>
+                            </li>
+                          ))
+                        ) : (
+                          <li className="text-sm text-slate-500 dark:text-slate-400">No private notes recorded yet.</li>
+                        )}
+                      </ol>
+                    </>
+                  );
+                })()}
+              </section>
+            )}
+          </section>
+        </div>
+      )}
+      {isAdmin && allNotesDeveloperId && (
+        <div
+          className="fixed inset-0 z-20 flex items-center justify-center bg-slate-950/60 p-4"
+          role="presentation"
+          onMouseDown={() => setAllNotesDeveloperId(null)}
+        >
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="all-developer-notes-title"
+            className="max-h-[85vh] w-full max-w-2xl overflow-y-auto rounded-xl bg-white p-6 text-slate-950 shadow-2xl dark:bg-slate-900 dark:text-white"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-sm font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">Private history</p>
+                <h2 id="all-developer-notes-title" className="mt-1 text-2xl font-semibold">
+                  All notes for {selectedDeveloper?.id === allNotesDeveloperId
+                    ? selectedDeveloper.full_name ?? "this developer"
+                    : commentHistory[allNotesDeveloperId]?.[0]?.developer_name ?? "this developer"}
+                </h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setAllNotesDeveloperId(null)}
+                aria-label="Close all notes"
+                className="rounded-lg px-2 py-1 text-2xl leading-none text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+              >
+                x
+              </button>
+            </div>
+            <ol className="mt-6 space-y-4">
+              {(commentHistory[allNotesDeveloperId] ?? []).length > 0 ? (
+                commentHistory[allNotesDeveloperId].map((entry) => (
+                  <li key={entry.id} className="rounded-lg border border-slate-200 p-4 dark:border-slate-700">
+                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                      {entry.author} · <time dateTime={entry.created_at}>{formatCommentTimestamp(entry.created_at)}</time>
+                    </p>
+                    <p className="mt-2 whitespace-pre-wrap break-words text-sm text-slate-800 dark:text-slate-200">{entry.comment}</p>
+                  </li>
+                ))
+              ) : (
+                <li className="text-sm text-slate-500 dark:text-slate-400">No private notes recorded yet.</li>
+              )}
+            </ol>
           </section>
         </div>
       )}

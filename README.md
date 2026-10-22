@@ -7,6 +7,7 @@ A modern [Next.js](https://nextjs.org) application with [Supabase](https://supab
 - 🔐 User authentication with Supabase Auth
 - 📝 Form submission handling
 - 👥 Developer dashboard
+- 💬 Private, timestamped administrator notes on developer profiles
 - 📋 Queue management system
 - 🎨 Responsive UI with TailwindCSS
 - 📱 Mobile-friendly design
@@ -70,6 +71,12 @@ ADMIN_EMAIL=your_admin_email
 
 **Note:** The `NEXT_PUBLIC_` prefix makes these variables accessible in the browser. Never commit `.env.local` to version control.
 Keep `SUPABASE_SERVICE_ROLE_KEY` and `ADMIN_EMAIL` server-only; never expose them to browser code or commit them to version control. `ADMIN_EMAIL` controls access to the admin dashboard and admin API actions.
+
+### Developer comments
+
+Notes are visible only to
+administrators, cannot be edited or deleted from the dashboard, and remain
+available in the archived-notes section if a developer record is deleted.
 
 ## Development
 
