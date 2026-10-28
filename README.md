@@ -74,9 +74,13 @@ Keep `SUPABASE_SERVICE_ROLE_KEY` and `ADMIN_EMAIL` server-only; never expose the
 ### 4. Database Migrations
 
 SQL migrations are provided in `supabase/migrations/`.
-To apply the developer directory schema alignment and idle days tracking updates, execute the migration in `supabase/migrations/20261020000000_update_developers_and_developer_overview.sql` in your Supabase SQL Editor:
-- Adds `joined_at` and `available_from` columns to `developers` table with default and backfill.
-- Updates `developer_overview` view to dynamically resolve the date developers became available (from ended project assignments) and include location, availability hours, and join dates.
+To apply the developer directory schema alignment, dynamic availability derivation, and idle days tracking updates, execute the migration in `supabase/migrations/20261028000000_derive_developer_availability.sql` (or `supabase/migrations/20261020000000_update_developers_and_developer_overview.sql`) in your Supabase SQL Editor:
+- Recreates `developer_overview` view to dynamically derive availability status and active projects from `project_assignments`:
+  - **No project assignments** -> `Available`
+  - **All assignments have an end date of today or earlier** -> `Available`
+  - **At least one assignment has no end date** -> `Unavailable`
+  - **At least one assignment has a future end date** -> `Unavailable`
+- Resolves the date a developer became available (`available_from`) from the latest completed assignment end date (on or before today), falling back to `joined_at` or `created_at`.
 
 ## Development
 

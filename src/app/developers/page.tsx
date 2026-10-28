@@ -14,6 +14,9 @@ import {
   getDeveloperAvailableDate,
   calculateIdleDays,
   isAvailableForAllocation,
+  deriveDeveloperAvailability,
+  isAssignmentActive,
+  deriveLatestEndedDate,
 } from "@/lib/developers";
 
 export default function DevelopersPage() {
@@ -40,7 +43,6 @@ export default function DevelopersPage() {
     skills: "",
     location: "",
     availability_hours: "0",
-    status: "available",
     joined_at: new Date().toISOString().split("T")[0],
   });
 
@@ -84,6 +86,99 @@ export default function DevelopersPage() {
 
         // Query data if authenticated or in dev/preview
         if (user || isDevOrPreview) {
+          // Helper to enrich developer records with assignment-derived availability
+          const enrichWithAssignments = async (
+            baseDevelopers: Developer[],
+            includeDevTableFallback: boolean
+          ): Promise<Developer[]> => {
+            const devMap = new Map<
+              string,
+              {
+                id: string;
+                location?: string | null;
+                availability_hours?: number | null;
+                created_at?: string | null;
+                joined_at?: string | null;
+              }
+            >();
+
+            if (includeDevTableFallback) {
+              const devTableQuery = await supabase
+                .from("developers")
+                .select("id, location, availability_hours, created_at");
+              (devTableQuery.data || []).forEach((d) => devMap.set(d.id, d));
+            }
+
+            const assignQuery = await supabase
+              .from("project_assignments")
+              .select("developer_id, project_id, end_date, created_at, projects(name)");
+
+            // If project_assignments cannot be queried directly, rely on developer_overview fields
+            if (assignQuery.error || !assignQuery.data) {
+              return baseDevelopers.map((ov) => {
+                const tableDev = devMap.get(ov.id);
+                return {
+                  ...ov,
+                  location: ov.location ?? tableDev?.location ?? null,
+                  availability_hours: ov.availability_hours ?? tableDev?.availability_hours ?? 0,
+                  created_at: ov.created_at ?? tableDev?.created_at ?? null,
+                  joined_at: ov.joined_at ?? tableDev?.created_at ?? null,
+                  available_from: ov.available_from ?? ov.joined_at ?? tableDev?.created_at ?? null,
+                };
+              });
+            }
+
+            type RawAssignmentRow = {
+              developer_id: string;
+              end_date?: string | null;
+              projects?: { name?: string | null } | Array<{ name?: string | null }> | null;
+            };
+
+            const devAssignmentsMap = new Map<
+              string,
+              Array<{ end_date?: string | null; project_name?: string | null }>
+            >();
+            (assignQuery.data as RawAssignmentRow[]).forEach((a) => {
+              if (!devAssignmentsMap.has(a.developer_id)) {
+                devAssignmentsMap.set(a.developer_id, []);
+              }
+              const projectName = Array.isArray(a.projects)
+                ? (a.projects[0]?.name ?? null)
+                : (a.projects?.name ?? null);
+              devAssignmentsMap.get(a.developer_id)!.push({
+                end_date: a.end_date,
+                project_name: projectName,
+              });
+            });
+
+            return baseDevelopers.map((ov) => {
+              const tableDev = devMap.get(ov.id);
+              const assignments = devAssignmentsMap.get(ov.id) || [];
+              const derivedStatus = deriveDeveloperAvailability(assignments);
+              const activeAssignment = assignments.find((a) => isAssignmentActive(a));
+              const activeProjectName =
+                derivedStatus === "unavailable"
+                  ? (activeAssignment?.project_name ?? ov.project_name ?? null)
+                  : null;
+              const fallbackJoinDate = ov.joined_at ?? ov.created_at ?? tableDev?.created_at ?? null;
+              const latestEndDate = deriveLatestEndedDate(assignments, fallbackJoinDate);
+
+              return {
+                ...ov,
+                status: derivedStatus,
+                project_name: activeProjectName,
+                location: ov.location ?? tableDev?.location ?? null,
+                availability_hours: ov.availability_hours ?? tableDev?.availability_hours ?? 0,
+                created_at: ov.created_at ?? tableDev?.created_at ?? null,
+                joined_at: fallbackJoinDate,
+                available_from:
+                  derivedStatus === "available"
+                    ? (latestEndDate ? latestEndDate.toISOString() : (ov.available_from ?? fallbackJoinDate))
+                    : null,
+              };
+            });
+          };
+
           // Attempt query on updated developer_overview view (when migration is applied)
           const fullQuery = await supabase
             .from("developer_overview")
@@ -92,7 +187,8 @@ export default function DevelopersPage() {
             .order("full_name");
 
           if (!fullQuery.error && fullQuery.data && fullQuery.data.length > 0) {
-            setDevelopers(fullQuery.data as Developer[]);
+            const enriched = await enrichWithAssignments(fullQuery.data as Developer[], false);
+            setDevelopers(enriched);
             setLoading(false);
             return;
           }
@@ -102,44 +198,13 @@ export default function DevelopersPage() {
           const basicQuery = await supabase
             .from("developer_overview")
             .select("id, full_name, email, skills, status, project_name")
-            .order("status")
             .order("full_name");
 
           if (!basicQuery.error && basicQuery.data) {
-            // Fetch extra columns from developers table (location, availability_hours, created_at)
-            const devTableQuery = await supabase
-              .from("developers")
-              .select("id, location, availability_hours, created_at");
-
-            const devMap = new Map((devTableQuery.data || []).map((d) => [d.id, d]));
-
-            // Fetch ended assignments from project_assignments to determine when developer became available
-            const assignQuery = await supabase
-              .from("project_assignments")
-              .select("developer_id, end_date")
-              .not("end_date", "is", null);
-
-            const latestAssignmentEndMap = new Map<string, string>();
-            (assignQuery.data || []).forEach((a) => {
-              const current = latestAssignmentEndMap.get(a.developer_id);
-              if (!current || new Date(a.end_date) > new Date(current)) {
-                latestAssignmentEndMap.set(a.developer_id, a.end_date);
-              }
-            });
-
-            const mergedDevelopers: Developer[] = basicQuery.data.map((ov) => {
-              const tableDev = devMap.get(ov.id);
-              const lastEndDate = latestAssignmentEndMap.get(ov.id);
-              return {
-                ...ov,
-                location: tableDev?.location ?? null,
-                availability_hours: tableDev?.availability_hours ?? 0,
-                created_at: tableDev?.created_at ?? null,
-                joined_at: tableDev?.created_at ?? null,
-                available_from: lastEndDate ?? tableDev?.created_at ?? null,
-              };
-            });
-
+            const mergedDevelopers = await enrichWithAssignments(
+              basicQuery.data as Developer[],
+              true
+            );
             setDevelopers(mergedDevelopers);
             setLoading(false);
             return;
@@ -191,10 +256,10 @@ export default function DevelopersPage() {
       skills: newDeveloper.skills.split(",").map((s) => s.trim()).filter(Boolean),
       location: newDeveloper.location || null,
       availability_hours: Number(newDeveloper.availability_hours) || 0,
-      status: newDeveloper.status,
+      status: "available", // Derived from assignments: new developers have no assignments -> Available
       project_name: null,
       joined_at: newDeveloper.joined_at,
-      available_from: newDeveloper.status === "available" ? newDeveloper.joined_at : null,
+      available_from: newDeveloper.joined_at,
     };
 
     if (isDemoMode) {
@@ -205,7 +270,6 @@ export default function DevelopersPage() {
         skills: "",
         location: "",
         availability_hours: "0",
-        status: "available",
         joined_at: new Date().toISOString().split("T")[0],
       });
       setSaving(false);
@@ -239,7 +303,6 @@ export default function DevelopersPage() {
           skills: "",
           location: "",
           availability_hours: "0",
-          status: "available",
           joined_at: new Date().toISOString().split("T")[0],
         });
       }
@@ -568,10 +631,10 @@ export default function DevelopersPage() {
               <label className="block text-xs font-medium text-slate-500 mb-1">Joining Date</label>
               <input type="date" value={newDeveloper.joined_at} onChange={(event) => setNewDeveloper({ ...newDeveloper, joined_at: event.target.value })} aria-label="Joining Date" className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-white" />
             </div>
-            <select value={newDeveloper.status} onChange={(event) => setNewDeveloper({ ...newDeveloper, status: event.target.value })} aria-label="Status" className="rounded-lg border border-slate-300 px-3 py-2.5 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-white">
-              <option value="available">Available</option>
-              <option value="unavailable">Unavailable</option>
-            </select>
+            <div className="flex flex-col justify-center rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300">
+              <span className="font-semibold text-slate-800 dark:text-slate-100">Status: Available</span>
+              <span className="text-[11px] text-slate-500 dark:text-slate-400">Derived from assignments (0 project assignments)</span>
+            </div>
             <div className="md:col-span-2 lg:col-span-3 flex items-center gap-4">
               <button type="submit" disabled={saving} className="rounded-lg bg-slate-950 px-4 py-2.5 text-sm font-medium text-white disabled:opacity-60 dark:bg-white dark:text-slate-950">{saving ? "Adding..." : "Add developer"}</button>
               {formError && <p className="text-sm text-red-700 dark:text-red-300" role="alert">{formError}</p>}
@@ -730,7 +793,9 @@ export default function DevelopersPage() {
                   </td>
                   <td className="px-5 py-4 text-sm whitespace-nowrap">
                     <div className="font-medium text-slate-900 dark:text-slate-100">
-                      {formatDisplayDate(developer.available_from || developer.joined_at || developer.created_at)}
+                      {developer.isAvailableForAllocation
+                        ? formatDisplayDate(developer.available_from || developer.joined_at || developer.created_at)
+                        : "Currently unavailable"}
                     </div>
                     {(developer.joined_at || developer.created_at) && (
                       <div className="text-xs text-slate-500 dark:text-slate-400">
@@ -839,7 +904,7 @@ export default function DevelopersPage() {
 
             <dl className="mt-5 grid gap-3.5 text-sm">
               <div><dt className="font-medium text-slate-500 dark:text-slate-400">Email</dt><dd className="mt-0.5 text-slate-950 dark:text-white">{selectedDeveloper.email ?? "Not provided"}</dd></div>
-              <div><dt className="font-medium text-slate-500 dark:text-slate-400">Became Available</dt><dd className="mt-0.5 text-slate-950 dark:text-white">{formatDisplayDate(selectedDeveloper.available_from || selectedDeveloper.joined_at || selectedDeveloper.created_at)}</dd></div>
+              <div><dt className="font-medium text-slate-500 dark:text-slate-400">Became Available</dt><dd className="mt-0.5 text-slate-950 dark:text-white">{selectedDeveloper.isAvailableForAllocation ? formatDisplayDate(selectedDeveloper.available_from || selectedDeveloper.joined_at || selectedDeveloper.created_at) : "Currently unavailable"}</dd></div>
               <div><dt className="font-medium text-slate-500 dark:text-slate-400">Original Joining Date</dt><dd className="mt-0.5 text-slate-950 dark:text-white">{formatDisplayDate(selectedDeveloper.joined_at || selectedDeveloper.created_at)}</dd></div>
               <div><dt className="font-medium text-slate-500 dark:text-slate-400">Skills</dt><dd className="mt-0.5 text-slate-950 dark:text-white">{formatSkills(selectedDeveloper.skills)}</dd></div>
               <div><dt className="font-medium text-slate-500 dark:text-slate-400">Project</dt><dd className="mt-0.5 text-slate-950 dark:text-white">{selectedDeveloper.project_name ?? "Unassigned"}</dd></div>

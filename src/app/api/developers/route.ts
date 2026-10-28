@@ -64,7 +64,6 @@ export async function POST(request: Request) {
     availability_hours: Number.isFinite(Number(body.availability_hours))
       ? Number(body.availability_hours)
       : 0,
-    status: body.status === "unavailable" ? "unavailable" : "available",
   };
 
   if (typeof body.joined_at === "string" && body.joined_at.trim()) {

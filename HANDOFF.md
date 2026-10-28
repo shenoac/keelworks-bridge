@@ -91,6 +91,18 @@ The main data entities referenced by the app are `projects`, `developers`, `requ
   - Added schema migration in `supabase/migrations/20261020000000_update_developers_and_developer_overview.sql` to add `joined_at` and `available_from` columns to `developers` table and recreate `developer_overview` view with dynamic availability tracking.
   - Handled `POST /api/developers` graceful fallback when `joined_at` does not yet exist on `developers` table.
 
+### 2026-10-28: Derived developer availability from project assignments
+
+- **Derived availability rules**: Instead of storing availability as an independent mutable status, availability is now derived strictly from project assignments:
+  - **No project assignments** -> `Available`
+  - **All assignments have an end date of today or earlier** -> `Available`
+  - **At least one assignment has no end date** -> `Unavailable`
+  - **At least one assignment has a future end date** -> `Unavailable`
+- **History preservation**: Completed projects record the assignment's `end_date` rather than deleting the assignment row, preserving assignment history for calculating bench idle days and FIFO allocation ranking.
+- **Shared utilities (`src/lib/developers.ts`)**: Added `deriveDeveloperAvailability`, `isAssignmentActive`, `isFutureEndDate`, and `deriveLatestEndedDate`. Updated `SAMPLE_PROJECT_ASSIGNMENTS` and `SAMPLE_DEVELOPERS` fixtures to dynamically derive availability adhering to all 4 rule scenarios.
+- **Developer directory (`src/app/developers/page.tsx`)**: Fallback query derives availability status and active project directly from `project_assignments` and `projects`. "Add developer" form displays derived initial availability (`Available`) since new developers have zero assignments.
+- **Database view & migrations**: Updated `supabase/migrations/20261020000000_update_developers_and_developer_overview.sql` and added `supabase/migrations/20261028000000_derive_developer_availability.sql` to recreate `developer_overview` with derived availability `status`, `project_name`, and `available_from` without storing a separate status on `developers`.
+
 ## Current Local Feature: Admin Management
 
 The uncommitted changes add admin-only create/delete workflows for developers and projects.
