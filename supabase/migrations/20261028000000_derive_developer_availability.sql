@@ -12,11 +12,14 @@
 --    falling back to `joined_at` or `created_at` when the developer has no prior assignments.
 
 ALTER TABLE public.developers
-ADD COLUMN IF NOT EXISTS joined_at timestamptz DEFAULT now();
+ADD COLUMN IF NOT EXISTS joined_at timestamptz;
 
 UPDATE public.developers
 SET joined_at = created_at
 WHERE joined_at IS NULL;
+
+ALTER TABLE public.developers
+ALTER COLUMN joined_at SET DEFAULT now();
 
 DROP VIEW IF EXISTS public.developer_overview;
 
