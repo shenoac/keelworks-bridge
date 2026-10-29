@@ -56,24 +56,42 @@ export async function POST(request: Request) {
     return Response.json({ error: "A valid name and email are required" }, { status: 400 });
   }
 
+  const insertPayload: Record<string, unknown> = {
+    full_name: fullName,
+    email: developerEmail,
+    skills,
+    location: typeof body.location === "string" ? body.location.trim() || null : null,
+    availability_hours: Number.isFinite(Number(body.availability_hours))
+      ? Number(body.availability_hours)
+      : 0,
+  };
+
+  if (typeof body.joined_at === "string" && body.joined_at.trim()) {
+    insertPayload.joined_at = body.joined_at.trim();
+  }
+
   const adminClient = createClient(supabaseUrl, serviceRoleKey);
-  const { data, error } = await adminClient
+  let { data, error } = await adminClient
     .from("developers")
-    .insert({
-      full_name: fullName,
-      email: developerEmail,
-      skills,
-      location: typeof body.location === "string" ? body.location.trim() || null : null,
-      availability_hours: Number.isFinite(Number(body.availability_hours))
-        ? Number(body.availability_hours)
-        : 0,
-      status: body.status === "unavailable" ? "unavailable" : "available",
-    })
+    .insert(insertPayload)
     .select("id")
     .single();
 
-  if (error) {
-    return Response.json({ error: error.message }, { status: 400 });
+  // If column joined_at does not exist in developers table yet, retry without joined_at
+  if (error && insertPayload.joined_at && error.message?.includes("joined_at")) {
+    const fallbackPayload = { ...insertPayload };
+    delete fallbackPayload.joined_at;
+    const retry = await adminClient
+      .from("developers")
+      .insert(fallbackPayload)
+      .select("id")
+      .single();
+    data = retry.data;
+    error = retry.error;
+  }
+
+  if (error || !data) {
+    return Response.json({ error: error?.message ?? "Failed to create developer" }, { status: 400 });
   }
 
   return Response.json({ id: data.id }, { status: 201 });
