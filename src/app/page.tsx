@@ -48,7 +48,7 @@ export default function Home() {
         if (response.ok) {
           const adminData = await response.json();
           setIsAdmin(adminData.isAdmin === true);
-          setCanDelete(adminData.canDelete === true);
+          setCanDelete(adminData.isAdmin === true);
         }
       }
     })();
