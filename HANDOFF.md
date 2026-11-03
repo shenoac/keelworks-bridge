@@ -82,6 +82,27 @@ The main data entities referenced by the app are `projects`, `developers`, `requ
 - Made the server-side Supabase client lazy so builds do not require `SUPABASE_SERVICE_ROLE_KEY` at module import time.
 - Added `.env.example` and documented the server-only service-role key.
 
+### 2026-10-20: Schema alignment, idle days & auth enforcement
+
+- **Production authentication enforcement**: Restriced interactive demo mode to development and preview environments (`process.env.NODE_ENV !== "production"` or `NEXT_PUBLIC_VERCEL_ENV === "preview"`). In production, unauthenticated users are redirected to `/login` and demo mode/sample data fallback is never activated.
+- **Dynamic idle days calculation**: Updated idle days calculation to compute from the date the developer most recently became available (e.g. from the most recent project assignment `end_date`, or `available_from`, falling back to `joined_at`/`created_at`). This ensures developers returning from project assignments start at 0 idle days.
+- **Supabase schema alignment & migrations**:
+  - Aligned the developer page to function on both the existing schema (where `developer_overview` only contains `id, full_name, email, skills, status, project_name` and `developers` contains `location, availability_hours, created_at`) and the upgraded schema.
+  - Added schema migration in `supabase/migrations/20261020000000_update_developers_and_developer_overview.sql` to add `joined_at` and `available_from` columns to `developers` table and recreate `developer_overview` view with dynamic availability tracking.
+  - Handled `POST /api/developers` graceful fallback when `joined_at` does not yet exist on `developers` table.
+
+### 2026-10-28: Derived developer availability from project assignments
+
+- **Derived availability rules**: Instead of storing availability as an independent mutable status, availability is now derived strictly from project assignments:
+  - **No project assignments** -> `Available`
+  - **All assignments have an end date of today or earlier** -> `Available`
+  - **At least one assignment has no end date** -> `Unavailable`
+  - **At least one assignment has a future end date** -> `Unavailable`
+- **History preservation**: Completed projects record the assignment's `end_date` rather than deleting the assignment row, preserving assignment history for calculating bench idle days and FIFO allocation ranking.
+- **Shared utilities (`src/lib/developers.ts`)**: Added `deriveDeveloperAvailability`, `isAssignmentActive`, `isFutureEndDate`, and `deriveLatestEndedDate`. Updated `SAMPLE_PROJECT_ASSIGNMENTS` and `SAMPLE_DEVELOPERS` fixtures to dynamically derive availability adhering to all 4 rule scenarios.
+- **Developer directory (`src/app/developers/page.tsx`)**: Fallback query derives availability status and active project directly from `project_assignments` and `projects`. "Add developer" form displays derived initial availability (`Available`) since new developers have zero assignments.
+- **Database view & migrations**: Updated `supabase/migrations/20261020000000_update_developers_and_developer_overview.sql` and added `supabase/migrations/20261028000000_derive_developer_availability.sql` to recreate `developer_overview` with derived availability `status`, `project_name`, and `available_from` without storing a separate status on `developers`.
+
 ## Current Local Feature: Admin Management
 
 The uncommitted changes add admin-only create/delete workflows for developers and projects.
