@@ -55,8 +55,10 @@ export default function DevelopersPage() {
   const [allocationOnly, setAllocationOnly] = useState(false);
   const [sortBy, setSortBy] = useState("priority");
   const [selectedDeveloper, setSelectedDeveloper] = useState<EnrichedDeveloperWithComments | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [editingGithubUrl, setEditingGithubUrl] = useState("");
+  const [savingGithubUrl, setSavingGithubUrl] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [canDelete, setCanDelete] = useState(false);
   const [isDemoMode, setIsDemoMode] = useState(false);
@@ -70,6 +72,7 @@ export default function DevelopersPage() {
   const [newDeveloper, setNewDeveloper] = useState({
     full_name: "",
     email: "",
+    github_url: "",
     skills: "",
     location: "",
     availability_hours: "0",
@@ -131,7 +134,6 @@ export default function DevelopersPage() {
           // Helper to enrich developer records with assignment-derived availability
           const enrichWithAssignments = async (
             baseDevelopers: Developer[],
-            includeDevTableFallback: boolean
           ): Promise<Developer[]> => {
             const devMap = new Map<
               string,
@@ -141,15 +143,15 @@ export default function DevelopersPage() {
                 availability_hours?: number | null;
                 created_at?: string | null;
                 joined_at?: string | null;
+                github_url?: string | null;
               }
             >();
 
-            if (includeDevTableFallback) {
-              const devTableQuery = await supabase
-                .from("developers")
-                .select("id, location, availability_hours, created_at");
-              (devTableQuery.data || []).forEach((d) => devMap.set(d.id, d));
-            }
+            const devTableQuery = await supabase
+            .from("developers")
+            .select("id, github_url, location, availability_hours, created_at");
+
+          (devTableQuery.data || []).forEach((d) => devMap.set(d.id, d));
 
             const assignQuery = await supabase
               .from("project_assignments")
@@ -161,6 +163,7 @@ export default function DevelopersPage() {
                 const tableDev = devMap.get(ov.id);
                 return {
                   ...ov,
+                  github_url: tableDev?.github_url ?? null,
                   location: ov.location ?? tableDev?.location ?? null,
                   availability_hours: ov.availability_hours ?? tableDev?.availability_hours ?? 0,
                   created_at: ov.created_at ?? tableDev?.created_at ?? null,
@@ -207,6 +210,7 @@ export default function DevelopersPage() {
 
               return {
                 ...ov,
+                github_url: tableDev?.github_url ?? null,
                 status: derivedStatus,
                 project_name: activeProjectName,
                 location: ov.location ?? tableDev?.location ?? null,
@@ -229,7 +233,7 @@ export default function DevelopersPage() {
             .order("full_name");
 
           if (!fullQuery.error && fullQuery.data && fullQuery.data.length > 0) {
-            const enriched = await enrichWithAssignments(fullQuery.data as Developer[], false);
+            const enriched = await enrichWithAssignments(fullQuery.data as Developer[]);
             setDevelopers(enriched);
             setLoading(false);
             return;
@@ -245,7 +249,6 @@ export default function DevelopersPage() {
           if (!basicQuery.error && basicQuery.data) {
             const mergedDevelopers = await enrichWithAssignments(
               basicQuery.data as Developer[],
-              true
             );
             setDevelopers(mergedDevelopers);
             setLoading(false);
@@ -285,6 +288,80 @@ export default function DevelopersPage() {
     loadData();
   }, [router]);
 
+  function openDeveloperProfile(developer: EnrichedDeveloperWithComments) {
+  setEditingGithubUrl(developer.github_url ?? "");
+  setSelectedDeveloper(developer);
+}
+
+  async function saveGithubUrl() {
+    if (!selectedDeveloper || !isAdmin || savingGithubUrl) return;
+
+    setSavingGithubUrl(true);
+
+    try {
+      if (isDemoMode) {
+        const githubUrl = editingGithubUrl.trim() || null;
+        setDevelopers((current) =>
+          current.map((dev) =>
+            dev.id === selectedDeveloper.id
+              ? { ...dev, github_url: githubUrl }
+              : dev
+          )
+        );
+        setSelectedDeveloper((current) =>
+          current ? { ...current, github_url: githubUrl } : current
+        );
+        return;
+        }
+
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData.session) {
+        alert("Your session has expired.");
+        return;
+      }
+
+      const response = await fetch("/api/developers", {
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${sessionData.session.access_token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          id: selectedDeveloper.id,
+          github_url: editingGithubUrl.trim(),
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        alert(result.error ?? "Unable to save GitHub URL.");
+        return;
+      }
+
+      setDevelopers((current) =>
+        current.map((dev) =>
+          dev.id === result.id
+            ? { ...dev, github_url: result.github_url }
+            : dev
+        )
+      );
+
+      setSelectedDeveloper((current) => {
+        if (!current || current.id !== result.id) {
+          return current;
+        }
+
+        return { ...current, github_url: result.github_url };
+      });
+
+    } catch {
+      alert("Network error saving GitHub URL.");
+    } finally {
+      setSavingGithubUrl(false);
+    }
+  }
+
   async function addDeveloper(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSaving(true);
@@ -294,6 +371,7 @@ export default function DevelopersPage() {
       id: `dev-${Date.now()}`,
       full_name: newDeveloper.full_name,
       email: newDeveloper.email,
+      github_url: newDeveloper.github_url.trim() || null,
       skills: newDeveloper.skills.split(",").map((s) => s.trim()).filter(Boolean),
       location: newDeveloper.location || null,
       availability_hours: Number(newDeveloper.availability_hours) || 0,
@@ -308,6 +386,7 @@ export default function DevelopersPage() {
       setNewDeveloper({
         full_name: "",
         email: "",
+        github_url: "",
         skills: "",
         location: "",
         availability_hours: "0",
@@ -341,6 +420,7 @@ export default function DevelopersPage() {
         setNewDeveloper({
           full_name: "",
           email: "",
+          github_url: "",
           skills: "",
           location: "",
           availability_hours: "0",
@@ -704,7 +784,7 @@ export default function DevelopersPage() {
                   </span>
                   <button
                     type="button"
-                    onClick={() => setSelectedDeveloper(dev)}
+                    onClick={() => openDeveloperProfile(dev)}
                     className="text-xs font-semibold text-slate-700 hover:text-slate-950 hover:underline dark:text-slate-300 dark:hover:text-white"
                   >
                     View profile →
@@ -723,6 +803,16 @@ export default function DevelopersPage() {
           <form className="mt-4 grid gap-4 md:grid-cols-2 lg:grid-cols-3" onSubmit={addDeveloper}>
             <input required value={newDeveloper.full_name} onChange={(event) => setNewDeveloper({ ...newDeveloper, full_name: event.target.value })} placeholder="Full name" aria-label="Full name" className="rounded-lg border border-slate-300 px-3 py-2.5 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-white" />
             <input required type="email" value={newDeveloper.email} onChange={(event) => setNewDeveloper({ ...newDeveloper, email: event.target.value })} placeholder="Email" aria-label="Email" className="rounded-lg border border-slate-300 px-3 py-2.5 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-white" />
+            <input
+              type="url"
+              value={newDeveloper.github_url}
+              onChange={(event) =>
+                setNewDeveloper({ ...newDeveloper, github_url: event.target.value })
+              }
+              placeholder="GitHub profile URL (optional)"
+              aria-label="GitHub profile URL"
+              className="rounded-lg border border-slate-300 px-3 py-2.5 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+            />
             <input value={newDeveloper.skills} onChange={(event) => setNewDeveloper({ ...newDeveloper, skills: event.target.value })} placeholder="Skills, comma separated" aria-label="Skills" className="rounded-lg border border-slate-300 px-3 py-2.5 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-white" />
             <input value={newDeveloper.location} onChange={(event) => setNewDeveloper({ ...newDeveloper, location: event.target.value })} placeholder="Location" aria-label="Location" className="rounded-lg border border-slate-300 px-3 py-2.5 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-white" />
             <input type="number" min="0" value={newDeveloper.availability_hours} onChange={(event) => setNewDeveloper({ ...newDeveloper, availability_hours: event.target.value })} placeholder="Availability hours" aria-label="Availability hours" className="rounded-lg border border-slate-300 px-3 py-2.5 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-white" />
@@ -934,7 +1024,7 @@ export default function DevelopersPage() {
                     <div className="flex flex-wrap justify-end gap-2">
                       <button
                         type="button"
-                        onClick={() => setSelectedDeveloper(developer)}
+                        onClick={() => openDeveloperProfile(developer)}
                         className="rounded-lg border border-slate-300 px-3 py-2 font-medium text-slate-700 transition hover:border-slate-500 hover:text-slate-950 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2 dark:border-slate-600 dark:text-slate-200 dark:hover:border-slate-400 dark:hover:text-white dark:focus:ring-slate-500 dark:focus:ring-offset-slate-900"
                       >
                         View profile
@@ -1026,6 +1116,51 @@ export default function DevelopersPage() {
 
             <dl className="mt-5 grid gap-3.5 text-sm">
               <div><dt className="font-medium text-slate-500 dark:text-slate-400">Email</dt><dd className="mt-0.5 text-slate-950 dark:text-white">{selectedDeveloper.email ?? "Not provided"}</dd></div>
+              {selectedDeveloper.github_url && (
+                <div>
+                  <dt className="font-medium text-slate-500 dark:text-slate-400">
+                    GitHub
+                  </dt>
+                  <dd className="mt-0.5">
+                    <a
+                      href={selectedDeveloper.github_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-700 underline hover:text-blue-900 dark:text-blue-300"
+                    >
+                      View GitHub profile ↗
+                    </a>
+                  </dd>
+                </div>
+              )}
+              {isAdmin && (
+                <div>
+                  <dt className="font-medium text-slate-500 dark:text-slate-400">
+                    Edit GitHub URL
+                  </dt>
+                  <dd className="mt-1">
+                    <input
+                      type="url"
+                      value={editingGithubUrl}
+                      onChange={(event) => setEditingGithubUrl(event.target.value)}
+                      placeholder="https://github.com/username"
+                      aria-label="Edit GitHub URL"
+                      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+                    />
+                    <button
+                      type="button"
+                      onClick={saveGithubUrl}
+                      disabled={
+                        savingGithubUrl ||
+                        editingGithubUrl.trim() === (selectedDeveloper.github_url ?? "")
+                      }
+                      className="mt-2 rounded-lg bg-slate-950 px-4 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-white dark:text-slate-950"
+                    >
+                      {savingGithubUrl ? "Saving..." : "Save GitHub URL"}
+                    </button>
+                  </dd>
+                </div>
+              )}
               <div><dt className="font-medium text-slate-500 dark:text-slate-400">Became Available</dt><dd className="mt-0.5 text-slate-950 dark:text-white">{selectedDeveloper.isAvailableForAllocation ? formatDisplayDate(selectedDeveloper.available_from || selectedDeveloper.joined_at || selectedDeveloper.created_at) : "Currently unavailable"}</dd></div>
               <div><dt className="font-medium text-slate-500 dark:text-slate-400">Original Joining Date</dt><dd className="mt-0.5 text-slate-950 dark:text-white">{formatDisplayDate(selectedDeveloper.joined_at || selectedDeveloper.created_at)}</dd></div>
               <div><dt className="font-medium text-slate-500 dark:text-slate-400">Skills</dt><dd className="mt-0.5 text-slate-950 dark:text-white">{formatSkills(selectedDeveloper.skills)}</dd></div>
