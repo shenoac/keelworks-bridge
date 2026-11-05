@@ -1,6 +1,25 @@
 import { createClient } from "@supabase/supabase-js";
 import { adminEmails } from "@/lib/adminEmails";
 
+function isValidGitHubProfileUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+
+    if (url.protocol !== "https:") return false;
+    if (url.hostname !== "github.com") return false;
+    if (url.port || url.search || url.hash) return false;
+    if (url.username || url.password) return false;
+
+    const match = url.pathname.match(
+      /^\/([a-zA-Z0-9](?:[a-zA-Z0-9-]{0,37}[a-zA-Z0-9])?)\/?$/
+    );
+
+    return Boolean(match) && !match![1].endsWith("-");
+  } catch {
+    return false;
+  }
+}
+
 async function getAuthenticatedEmail(request: Request) {
   const authorization = request.headers.get("authorization");
   const accessToken = authorization?.startsWith("Bearer ")
@@ -137,6 +156,15 @@ export async function POST(request: Request) {
   const body = await request.json();
   const fullName = typeof body.full_name === "string" ? body.full_name.trim() : "";
   const developerEmail = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
+  const githubUrl =
+  typeof body.github_url === "string" ? body.github_url.trim() : "";
+
+if (githubUrl && !isValidGitHubProfileUrl(githubUrl)) {
+  return Response.json(
+    { error: "Please enter a valid GitHub profile URL (https://github.com/username)" },
+    { status: 400 }
+  );
+}
   const skills = Array.isArray(body.skills)
     ? body.skills.filter((skill: unknown): skill is string => typeof skill === "string" && Boolean(skill.trim())).map((skill: string) => skill.trim())
     : [];
@@ -148,6 +176,7 @@ export async function POST(request: Request) {
   const insertPayload: Record<string, unknown> = {
     full_name: fullName,
     email: developerEmail,
+    github_url: githubUrl || null,
     skills,
     location: typeof body.location === "string" ? body.location.trim() || null : null,
     availability_hours: Number.isFinite(Number(body.availability_hours))
@@ -184,6 +213,86 @@ export async function POST(request: Request) {
   }
 
   return Response.json({ id: data.id }, { status: 201 });
+}
+
+export async function PUT(request: Request) {
+  const email = await getAuthenticatedEmail(request);
+
+  if (!email || !adminEmails.includes(email)) {
+    return Response.json(
+      { error: "Admin access is required" },
+      { status: 403 }
+    );
+  }
+
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!supabaseUrl || !serviceRoleKey) {
+    return Response.json(
+      { error: "Server configuration is incomplete" },
+      { status: 500 }
+    );
+  }
+
+  let body: { id?: unknown; github_url?: unknown };
+
+  try {
+    body = await request.json();
+  } catch {
+    return Response.json(
+      { error: "A valid JSON body is required" },
+      { status: 400 }
+    );
+  }
+
+  const id = typeof body.id === "string" ? body.id.trim() : "";
+  const githubUrl =
+    typeof body.github_url === "string" ? body.github_url.trim() : "";
+
+  if (!id) {
+    return Response.json(
+      { error: "A developer id is required" },
+      { status: 400 }
+    );
+  }
+
+  if (
+    !Object.prototype.hasOwnProperty.call(body, "github_url") ||
+    (body.github_url !== null && typeof body.github_url !== "string")
+  ) {
+    return Response.json(
+      { error: "A GitHub URL must be provided" },
+      { status: 400 }
+    );
+  }
+
+  if (githubUrl && !isValidGitHubProfileUrl(githubUrl)) {
+    return Response.json(
+      { error: "Please enter a valid GitHub profile URL" },
+      { status: 400 }
+    );
+  }
+
+  const { data, error } = await createClient(supabaseUrl, serviceRoleKey)
+    .from("developers")
+    .update({ github_url: githubUrl || null })
+    .eq("id", id)
+    .select("id, github_url")
+    .maybeSingle();
+
+  if (error) {
+    return Response.json({ error: error.message }, { status: 400 });
+  }
+
+  if (!data) {
+    return Response.json(
+      { error: "Developer not found" },
+      { status: 404 }
+    );
+  }
+
+  return Response.json(data);
 }
 
 export async function DELETE(request: Request) {

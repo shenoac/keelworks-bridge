@@ -9,6 +9,7 @@ export type Developer = {
   id: string;
   full_name: string | null;
   email: string | null;
+  github_url?: string | null;
   skills: string | string[] | null;
   status: string;
   project_name: string | null;
