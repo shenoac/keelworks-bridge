@@ -129,7 +129,41 @@ export default function QueuePage() {
         </div>
       )}
 
-      {!loading && !error && (
+      {!loading && !error && rows.length === 0 && (
+        <section
+          aria-labelledby="queue-empty-title"
+          className="flex flex-col items-center rounded-xl border border-dashed border-slate-300 bg-white px-6 py-14 text-center shadow-sm dark:border-slate-700 dark:bg-slate-900 sm:py-16"
+        >
+          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+            <svg
+              aria-hidden="true"
+              focusable="false"
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={1.5}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="h-6 w-6"
+            >
+              <path d="M2.25 13.5h3.86a2.25 2.25 0 0 1 2.01 1.24l.24.52a2.25 2.25 0 0 0 2.01 1.24h3.26a2.25 2.25 0 0 0 2.01-1.24l.24-.52a2.25 2.25 0 0 1 2.01-1.24h3.86" />
+              <path d="M2.25 13.5V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18v-4.5l-2.9-7.27A2.25 2.25 0 0 0 16.76 4.8H7.24a2.25 2.25 0 0 0-2.09 1.43L2.25 13.5Z" />
+            </svg>
+          </div>
+          <h2
+            id="queue-empty-title"
+            className="mt-4 text-base font-semibold text-slate-950 dark:text-white"
+          >
+            No requests yet
+          </h2>
+          <p className="mt-1 max-w-sm text-sm text-slate-600 dark:text-slate-300">
+            New project requests will appear here when they are submitted.
+          </p>
+        </section>
+      )}
+
+      {!loading && !error && rows.length > 0 && (
         <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900">
           <table className="w-full min-w-[850px] text-left text-sm">
             <thead className="border-b border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800">
