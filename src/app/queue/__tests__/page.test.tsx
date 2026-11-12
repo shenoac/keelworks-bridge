@@ -75,7 +75,7 @@ describe("QueuePage smoke test", () => {
       {
         id: "1",
         project_name: "Project Alpha",
-        owner: "Alice",
+        owner: "alice@example.com",
         email: "alice@example.com",
         title: "Request A",
         status: "pending",
@@ -86,7 +86,7 @@ describe("QueuePage smoke test", () => {
       {
         id: "2",
         project_name: "Project Beta",
-        owner: "Bob",
+        owner: null,
         email: null,
         title: "Request B",
         status: "completed",
@@ -97,7 +97,7 @@ describe("QueuePage smoke test", () => {
       {
         id: "3",
         project_name: "Project Gamma",
-        owner: "Charlie",
+        owner: "charlie@example.com",
         email: "",
         title: "Request C",
         status: "pending",
@@ -121,19 +121,27 @@ describe("QueuePage smoke test", () => {
     const rows = screen.getAllByRole("row");
     expect(rows).toHaveLength(4);
 
-    const aliceRow = rows.find((row) => row.textContent?.includes("Alice"));
+    const aliceRow = rows.find((row) =>
+      row.textContent?.includes("alice@example.com")
+    );
     expect(aliceRow).toBeDefined();
     expect(
       within(aliceRow!).getByTestId("copy-email-button")
     ).toBeInTheDocument();
 
-    const bobRow = rows.find((row) => row.textContent?.includes("Bob"));
+    const bobRow = rows.find((row) =>
+      row.textContent?.includes("Project Beta")
+    );
     expect(bobRow).toBeDefined();
     expect(within(bobRow!).queryByTestId("copy-email-button")).toBeNull();
 
-    const charlieRow = rows.find((row) => row.textContent?.includes("Charlie"));
+    const charlieRow = rows.find((row) =>
+      row.textContent?.includes("charlie@example.com")
+    );
     expect(charlieRow).toBeDefined();
-    expect(within(charlieRow!).queryByTestId("copy-email-button")).toBeNull();
+    expect(
+      within(charlieRow!).getByTestId("copy-email-button")
+    ).toBeInTheDocument();
 
     expect(screen.getByText(/showing 3 of 3 requests/i)).toBeInTheDocument();
 
@@ -159,15 +167,14 @@ describe("QueuePage smoke test", () => {
     expect(screen.getByText("Project Gamma")).toBeInTheDocument();
   });
 
-  it("shows email next to owner name when email is present", async () => {
+  it("shows the owner email and copy button", async () => {
     mockAuthenticatedUser("admin@keelworks.org");
 
     const mockData = [
       {
         id: "1",
         project_name: "Project Alpha",
-        owner: "Alice",
-        email: "alice@example.com",
+        owner: "alice@example.com",
         title: "Request A",
         status: "pending",
         target_start_date: null,
@@ -182,20 +189,22 @@ describe("QueuePage smoke test", () => {
 
     await waitFor(() => {
       expect(screen.getByText("alice@example.com")).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", {
+          name: /copy email alice@example.com/i,
+        })
+      ).toBeInTheDocument();
     });
-
-    expect(screen.getByText("Alice")).toBeInTheDocument();
   });
 
-  it("owner cell looks unchanged when email is not present", async () => {
+  it("does not show a copy button when owner email is missing", async () => {
     mockAuthenticatedUser("admin@keelworks.org");
 
     const mockData = [
       {
         id: "1",
         project_name: "Project Beta",
-        owner: "Bob",
-        email: null,
+        owner: null,
         title: "Request B",
         status: "completed",
         target_start_date: null,
@@ -209,7 +218,7 @@ describe("QueuePage smoke test", () => {
     render(<QueuePage />);
 
     await waitFor(() => {
-      expect(screen.getByText("Bob")).toBeInTheDocument();
+      expect(screen.getByText("Project Beta")).toBeInTheDocument();
     });
 
     expect(screen.queryByTestId("copy-email-button")).not.toBeInTheDocument();

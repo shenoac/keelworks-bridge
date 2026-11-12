@@ -193,12 +193,8 @@ export default function QueuePage() {
                   </td>
                   <td className="whitespace-nowrap px-5 py-4 text-slate-600 dark:text-slate-300">
                     {r.owner ?? "—"}
-                    {r.email?.trim() && (
-                      <>
-                        <span className="mx-1.5 text-slate-400 dark:text-slate-500">·</span>
-                        <span className="text-slate-500 dark:text-slate-400">{r.email.trim()}</span>
-                        <CopyEmailButton email={r.email} label={r.owner ?? r.email} />
-                      </>
+                    {r.owner?.trim() && (
+                      <CopyEmailButton email={r.owner} />
                     )}
                   </td>
                   <td className="whitespace-nowrap px-5 py-4 text-slate-600 dark:text-slate-300">
