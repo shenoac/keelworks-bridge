@@ -232,7 +232,7 @@ export function isFormerMember(
  * Determines whether a developer is unassigned and currently available on the bench.
  */
 export function isAvailableForAllocation(developer: Developer): boolean {
-    if (isFormerMember(developer)) return false; ̰ ̰
+    if (isFormerMember(developer)) return false;
   const status = developer.status?.toLowerCase().trim();
   const projectName = developer.project_name?.toLowerCase().trim();
   const hasNoProject = !projectName || projectName === "unassigned";
