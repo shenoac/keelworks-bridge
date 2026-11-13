@@ -429,7 +429,7 @@ export const SAMPLE_DEVELOPERS: Developer[] = [
     location: "San Francisco, CA",
     availability_hours: 30,
   },
-    { ̰
+  {
     id: "dev-7",
     full_name: "Sam Okafor",
     email: "sam.okafor@keelworks.org",
@@ -441,5 +441,5 @@ export const SAMPLE_DEVELOPERS: Developer[] = [
     left_at: formatLocalDateOnly(-10),
     location: "Remote",
     availability_hours: 0,
-  }, ̰
+  },
 ];
