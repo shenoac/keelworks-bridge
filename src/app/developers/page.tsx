@@ -990,7 +990,19 @@ export default function DevelopersPage() {
                         </a>
                       )}
                     </div>
-                    <div className="text-xs text-slate-500 dark:text-slate-400">{developer.email ?? "No email"}</div>
+                    <div className="text-xs text-slate-500 dark:text-slate-400">
+  {developer.email ? (
+    <a
+      href={`mailto:${developer.email}`}
+      title={`Email ${developer.full_name ?? developer.email}`}
+      className="rounded underline-offset-2 transition-colors hover:text-blue-600 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 dark:hover:text-blue-400"
+    >
+      {developer.email}
+    </a>
+  ) : (
+    "No email"
+  )}
+</div>
                   </td>
                   <td className="max-w-xs px-5 py-4 text-sm text-slate-600 dark:text-slate-300">{formatSkills(developer.skills)}</td>
                   <td className="px-5 py-4 text-sm">
@@ -1131,7 +1143,18 @@ export default function DevelopersPage() {
             </div>
 
             <dl className="mt-5 grid gap-3.5 text-sm">
-              <div><dt className="font-medium text-slate-500 dark:text-slate-400">Email</dt><dd className="mt-0.5 text-slate-950 dark:text-white">{selectedDeveloper.email ?? "Not provided"}</dd></div>
+            <dd className="mt-0.5 text-slate-950 dark:text-white">
+  {selectedDeveloper.email ? (
+    <a
+      href={`mailto:${selectedDeveloper.email}`}
+      className="rounded text-blue-600 underline-offset-2 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 dark:text-blue-400"
+    >
+      {selectedDeveloper.email}
+    </a>
+  ) : (
+    "Not provided"
+  )}
+</dd>
               {selectedDeveloper.github_url && (
                 <div>
                   <dt className="font-medium text-slate-500 dark:text-slate-400">
