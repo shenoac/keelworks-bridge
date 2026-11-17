@@ -19,6 +19,8 @@ export type Developer = {
   available_since?: string | null;
   location?: string | null;
   availability_hours?: number | null;
+    left_at?: string | null;
+  membership_status?: string | null;
 };
 
 export type ProjectAssignment = {
@@ -212,9 +214,25 @@ export function getDeveloperAvailableDate(developer: Developer): Date | null {
 }
 
 /**
+ * Determines whether a developer has left KeelWorks.
+ * - No departure date -> active member
+ * - Departure date on or before today -> former member
+ * - Future departure date -> still active until that date
+ * Kept separate from project-assignment availability.
+ */
+export function isFormerMember(
+  developer: Pick<Developer, "left_at">,
+  referenceDate: Date = new Date()
+): boolean {
+  if (!developer.left_at || !parseCalendarDate(developer.left_at)) return false;
+  return !isFutureEndDate(developer.left_at, referenceDate);
+}
+
+/**
  * Determines whether a developer is unassigned and currently available on the bench.
  */
 export function isAvailableForAllocation(developer: Developer): boolean {
+    if (isFormerMember(developer)) return false;
   const status = developer.status?.toLowerCase().trim();
   const projectName = developer.project_name?.toLowerCase().trim();
   const hasNoProject = !projectName || projectName === "unassigned";
@@ -410,5 +428,18 @@ export const SAMPLE_DEVELOPERS: Developer[] = [
     available_from: formatLocalDateOnly(0),
     location: "San Francisco, CA",
     availability_hours: 30,
+  },
+  {
+    id: "dev-7",
+    full_name: "Sam Okafor",
+    email: "sam.okafor@keelworks.org",
+    skills: ["Python", "SQL", "Data Analysis"],
+    status: deriveDeveloperAvailability([]),
+    project_name: null,
+    joined_at: formatLocalDateOnly(-200),
+    available_from: formatLocalDateOnly(-40),
+    left_at: formatLocalDateOnly(-10),
+    location: "Remote",
+    availability_hours: 0,
   },
 ];

@@ -215,6 +215,17 @@ if (githubUrl && !isValidGitHubProfileUrl(githubUrl)) {
   return Response.json({ id: data.id }, { status: 201 });
 }
 
+function isValidDateOnly(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const [year, month, day] = value.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return (
+    date.getUTCFullYear() === year &&
+    date.getUTCMonth() === month - 1 &&
+    date.getUTCDate() === day
+  );
+}
+
 export async function PUT(request: Request) {
   const email = await getAuthenticatedEmail(request);
 
@@ -235,7 +246,7 @@ export async function PUT(request: Request) {
     );
   }
 
-  let body: { id?: unknown; github_url?: unknown };
+  let body: { id?: unknown; github_url?: unknown; left_at?: unknown };
 
   try {
     body = await request.json();
@@ -247,8 +258,6 @@ export async function PUT(request: Request) {
   }
 
   const id = typeof body.id === "string" ? body.id.trim() : "";
-  const githubUrl =
-    typeof body.github_url === "string" ? body.github_url.trim() : "";
 
   if (!id) {
     return Response.json(
@@ -257,28 +266,66 @@ export async function PUT(request: Request) {
     );
   }
 
-  if (
-    !Object.prototype.hasOwnProperty.call(body, "github_url") ||
-    (body.github_url !== null && typeof body.github_url !== "string")
-  ) {
+  const hasGithubUrl = Object.prototype.hasOwnProperty.call(body, "github_url");
+  const hasLeftAt = Object.prototype.hasOwnProperty.call(body, "left_at");
+
+  if (!hasGithubUrl && !hasLeftAt) {
     return Response.json(
-      { error: "A GitHub URL must be provided" },
+      { error: "A GitHub URL or departure date must be provided" },
       { status: 400 }
     );
   }
 
-  if (githubUrl && !isValidGitHubProfileUrl(githubUrl)) {
-    return Response.json(
-      { error: "Please enter a valid GitHub profile URL" },
-      { status: 400 }
-    );
+  const updates: Record<string, string | null> = {};
+
+  if (hasGithubUrl) {
+    if (body.github_url !== null && typeof body.github_url !== "string") {
+      return Response.json(
+        { error: "A GitHub URL must be provided" },
+        { status: 400 }
+      );
+    }
+
+    const githubUrl =
+      typeof body.github_url === "string" ? body.github_url.trim() : "";
+
+    if (githubUrl && !isValidGitHubProfileUrl(githubUrl)) {
+      return Response.json(
+        { error: "Please enter a valid GitHub profile URL" },
+        { status: 400 }
+      );
+    }
+
+    updates.github_url = githubUrl || null;
+  }
+
+  // Departure date: a YYYY-MM-DD string records when the developer left
+  // KeelWorks; null clears it (the developer becomes an active member again).
+  if (hasLeftAt) {
+    if (body.left_at !== null && typeof body.left_at !== "string") {
+      return Response.json(
+        { error: "Departure date must be a date or null" },
+        { status: 400 }
+      );
+    }
+
+    const leftAt = typeof body.left_at === "string" ? body.left_at.trim() : "";
+
+    if (leftAt && !isValidDateOnly(leftAt)) {
+      return Response.json(
+        { error: "Departure date must be a valid date (YYYY-MM-DD)" },
+        { status: 400 }
+      );
+    }
+
+    updates.left_at = leftAt || null;
   }
 
   const { data, error } = await createClient(supabaseUrl, serviceRoleKey)
     .from("developers")
-    .update({ github_url: githubUrl || null })
+    .update(updates)
     .eq("id", id)
-    .select("id, github_url")
+    .select("id, github_url, left_at")
     .maybeSingle();
 
   if (error) {

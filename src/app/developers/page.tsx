@@ -7,6 +7,7 @@ import {
   type Developer as SharedDeveloper,
   type EnrichedDeveloper,
   SAMPLE_DEVELOPERS,
+  isFormerMember,
   isDevOrPreviewEnvironment,
   formatSkills,
   formatDisplayDate,
@@ -50,6 +51,7 @@ export default function DevelopersPage() {
   const [search, setSearch] = useState("");
   const [skillSearch, setSkillSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [membershipFilter, setMembershipFilter] = useState<"active" | "former" | "all">("active");
   const [projectFilter, setProjectFilter] = useState("all");
   const [allNotesDeveloperId, setAllNotesDeveloperId] = useState<string | null>(null);
   const [allocationOnly, setAllocationOnly] = useState(false);
@@ -57,6 +59,8 @@ export default function DevelopersPage() {
   const [selectedDeveloper, setSelectedDeveloper] = useState<EnrichedDeveloperWithComments | null>(null);
   const [editingGithubUrl, setEditingGithubUrl] = useState("");
   const [savingGithubUrl, setSavingGithubUrl] = useState(false);
+  const [editingLeftAt, setEditingLeftAt] = useState("");
+  const [savingLeftAt, setSavingLeftAt] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -228,7 +232,7 @@ export default function DevelopersPage() {
           // Attempt query on updated developer_overview view (when migration is applied)
           const fullQuery = await supabase
             .from("developer_overview")
-            .select("id, full_name, email, skills, status, project_name, joined_at, created_at, location, availability_hours, available_from")
+            .select("id, full_name, email, skills, status, project_name, joined_at, created_at, location, availability_hours, available_from, left_at, membership_status")
             .order("status")
             .order("full_name");
 
@@ -290,6 +294,7 @@ export default function DevelopersPage() {
 
   function openDeveloperProfile(developer: EnrichedDeveloperWithComments) {
   setEditingGithubUrl(developer.github_url ?? "");
+  setEditingLeftAt(developer.left_at?.slice(0, 10) ?? "");
   setSelectedDeveloper(developer);
 }
 
@@ -359,6 +364,65 @@ export default function DevelopersPage() {
       alert("Network error saving GitHub URL.");
     } finally {
       setSavingGithubUrl(false);
+    }
+  }
+
+  async function saveLeftAt(value: string | null) {
+    if (!selectedDeveloper || !isAdmin || savingLeftAt) return;
+
+    setSavingLeftAt(true);
+
+    try {
+      if (isDemoMode) {
+        setDevelopers((current) =>
+          current.map((dev) =>
+            dev.id === selectedDeveloper.id ? { ...dev, left_at: value } : dev
+          )
+        );
+        setSelectedDeveloper((current) =>
+          current ? { ...current, left_at: value } : current
+        );
+        setEditingLeftAt(value ?? "");
+        return;
+      }
+
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData.session) {
+        alert("Your session has expired.");
+        return;
+      }
+
+      const response = await fetch("/api/developers", {
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${sessionData.session.access_token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ id: selectedDeveloper.id, left_at: value }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        alert(result.error ?? "Unable to save departure date.");
+        return;
+      }
+
+      setDevelopers((current) =>
+        current.map((dev) =>
+          dev.id === result.id ? { ...dev, left_at: result.left_at } : dev
+        )
+      );
+      setSelectedDeveloper((current) =>
+        current && current.id === result.id
+          ? { ...current, left_at: result.left_at }
+          : current
+      );
+      setEditingLeftAt(result.left_at?.slice(0, 10) ?? "");
+    } catch {
+      alert("Network error saving departure date.");
+    } finally {
+      setSavingLeftAt(false);
     }
   }
 
@@ -625,8 +689,12 @@ export default function DevelopersPage() {
       const matchesStatus = statusFilter === "all" || developer.status === statusFilter;
       const matchesProject = projectFilter === "all" || developer.project_name === projectFilter;
       const matchesAllocation = !allocationOnly || developer.isAvailableForAllocation;
+      const former = isFormerMember(developer);
+      const matchesMembership =
+        membershipFilter === "all" ||
+        (membershipFilter === "former" ? former : !former);
 
-      return matchesSearch && matchesSkills && matchesStatus && matchesProject && matchesAllocation;
+      return matchesSearch && matchesSkills && matchesStatus && matchesProject && matchesAllocation && matchesMembership;
     });
 
     // Apply Sorting
@@ -673,11 +741,12 @@ export default function DevelopersPage() {
       }
       return 0;
     });
-  }, [enrichedDevelopers, search, skillSearch, statusFilter, projectFilter, allocationOnly, sortBy]);
+  }, [enrichedDevelopers, search, skillSearch, statusFilter, membershipFilter, projectFilter, allocationOnly, sortBy]);
 
   const hasActiveFilters =
     Boolean(search.trim() || skillSearch.trim()) ||
     statusFilter !== "all" ||
+    membershipFilter !== "active" ||
     projectFilter !== "all" ||
     allocationOnly ||
     sortBy !== "priority";
@@ -686,6 +755,7 @@ export default function DevelopersPage() {
     setSearch("");
     setSkillSearch("");
     setStatusFilter("all");
+    setMembershipFilter("active");
     setProjectFilter("all");
     setAllocationOnly(false);
     setSortBy("priority");
@@ -834,7 +904,7 @@ export default function DevelopersPage() {
 
       {/* Filters and Sorting Toolbar */}
       <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900" aria-label="Developer filters and sorting">
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5 md:items-end">
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-6 md:items-end">
           <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">
             Search
             <input
@@ -869,6 +939,19 @@ export default function DevelopersPage() {
                   {status === "all" ? "All statuses" : status}
                 </option>
               ))}
+            </select>
+          </label>
+
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">
+            Membership
+            <select
+              value={membershipFilter}
+              onChange={(event) => setMembershipFilter(event.target.value as "active" | "former" | "all")}
+              className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-950 outline-none focus:border-slate-500 focus:ring-2 focus:ring-slate-200 dark:border-slate-600 dark:bg-slate-800 dark:text-white dark:focus:border-slate-400 dark:focus:ring-slate-700"
+            >
+              <option value="active">Active members</option>
+              <option value="former">Former members</option>
+              <option value="all">All members</option>
             </select>
           </label>
 
@@ -975,6 +1058,7 @@ export default function DevelopersPage() {
                   <td className="px-5 py-4">
                     <div className="flex items-center gap-1.5 font-medium text-slate-950 dark:text-white">
                       <span>{developer.full_name ?? "Unknown developer"}</span>
+                      {isFormerMember(developer) && <span className="inline-flex whitespace-nowrap rounded-full border border-rose-200 bg-rose-50 px-2 py-0.5 text-xs font-semibold text-rose-700 dark:border-rose-800/60 dark:bg-rose-950/50 dark:text-rose-300">Former member</span>}
                       {developer.github_url && (
                         <a
                           href={developer.github_url}
@@ -1016,7 +1100,9 @@ export default function DevelopersPage() {
                   </td>
                   <td className="px-5 py-4 text-sm whitespace-nowrap">
                     <div className="font-medium text-slate-900 dark:text-slate-100">
-                      {developer.isAvailableForAllocation
+                      {isFormerMember(developer)
+                        ? `Left ${formatDisplayDate(developer.left_at)}`
+                        : developer.isAvailableForAllocation
                         ? formatDisplayDate(developer.available_from || developer.joined_at || developer.created_at)
                         : "Currently unavailable"}
                     </div>
@@ -1033,7 +1119,7 @@ export default function DevelopersPage() {
                       </span>
                     ) : (
                       <span className="text-xs text-slate-400 dark:text-slate-500">
-                        {developer.project_name ? "Assigned" : "Unavailable"}
+                        {isFormerMember(developer) ? "Former member" : developer.project_name ? "Assigned" : "Unavailable"}
                       </span>
                     )}
                   </td>
@@ -1044,7 +1130,7 @@ export default function DevelopersPage() {
                       </span>
                     ) : (
                       <span className="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-400">
-                        {developer.status ?? "Inactive"}
+                        {isFormerMember(developer) ? "Former member" : developer.status ?? "Inactive"}
                       </span>
                     )}
                   </td>
@@ -1137,7 +1223,7 @@ export default function DevelopersPage() {
               <div>
                 <p className="text-xs font-semibold uppercase text-slate-500 dark:text-slate-400">Idle Days</p>
                 <p className="mt-1 text-sm font-bold text-amber-700 dark:text-amber-400">
-                  {selectedDeveloper.idleDays !== null ? `${selectedDeveloper.idleDays} idle days` : "Currently Assigned / Unavailable"}
+                  {selectedDeveloper.idleDays !== null ? `${selectedDeveloper.idleDays} idle days` : isFormerMember(selectedDeveloper) ? "Former member" : "Currently Assigned / Unavailable"}
                 </p>
               </div>
             </div>
@@ -1212,7 +1298,61 @@ export default function DevelopersPage() {
                   </dd>
                 </div>
               )}
-              <div><dt className="font-medium text-slate-500 dark:text-slate-400">Became Available</dt><dd className="mt-0.5 text-slate-950 dark:text-white">{selectedDeveloper.isAvailableForAllocation ? formatDisplayDate(selectedDeveloper.available_from || selectedDeveloper.joined_at || selectedDeveloper.created_at) : "Currently unavailable"}</dd></div>
+              <div>
+                <dt className="font-medium text-slate-500 dark:text-slate-400">KeelWorks Membership</dt>
+                <dd className="mt-0.5 text-slate-950 dark:text-white">
+                  {isFormerMember(selectedDeveloper)
+                    ? `Former member (left ${formatDisplayDate(selectedDeveloper.left_at)})`
+                    : selectedDeveloper.left_at
+                    ? `Active member (leaving ${formatDisplayDate(selectedDeveloper.left_at)})`
+                    : "Active member"}
+                </dd>
+              </div>
+              {isAdmin && (
+                <div>
+                  <dt className="font-medium text-slate-500 dark:text-slate-400">
+                    Departure Date
+                  </dt>
+                  <dd className="mt-1">
+                    <input
+                      type="date"
+                      value={editingLeftAt}
+                      onChange={(event) => setEditingLeftAt(event.target.value)}
+                      aria-label="Departure date"
+                      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+                    />
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => saveLeftAt(editingLeftAt || null)}
+                        disabled={
+                          savingLeftAt ||
+                          !editingLeftAt ||
+                          editingLeftAt === (selectedDeveloper.left_at?.slice(0, 10) ?? "")
+                        }
+                        className="rounded-lg bg-slate-950 px-4 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-white dark:text-slate-950"
+                      >
+                        {savingLeftAt ? "Saving..." : "Save departure date"}
+                      </button>
+                      {selectedDeveloper.left_at && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (window.confirm("Clear this departure date and mark the developer as an active member?")) {
+                              saveLeftAt(null);
+                            }
+                          }}
+                          disabled={savingLeftAt}
+                          className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 disabled:opacity-50 dark:border-slate-600 dark:text-slate-200"
+                        >
+                          Clear departure date
+                        </button>
+                      )}
+                    </div>
+                  </dd>
+                </div>
+              )}
+              <div><dt className="font-medium text-slate-500 dark:text-slate-400">Became Available</dt><dd className="mt-0.5 text-slate-950 dark:text-white">{isFormerMember(selectedDeveloper) ? "Not applicable (former member)" : selectedDeveloper.isAvailableForAllocation ? formatDisplayDate(selectedDeveloper.available_from || selectedDeveloper.joined_at || selectedDeveloper.created_at) : "Currently unavailable"}</dd></div>
               <div><dt className="font-medium text-slate-500 dark:text-slate-400">Original Joining Date</dt><dd className="mt-0.5 text-slate-950 dark:text-white">{formatDisplayDate(selectedDeveloper.joined_at || selectedDeveloper.created_at)}</dd></div>
               <div><dt className="font-medium text-slate-500 dark:text-slate-400">Skills</dt><dd className="mt-0.5 text-slate-950 dark:text-white">{formatSkills(selectedDeveloper.skills)}</dd></div>
               <div><dt className="font-medium text-slate-500 dark:text-slate-400">Project</dt><dd className="mt-0.5 text-slate-950 dark:text-white">{selectedDeveloper.project_name ?? "Unassigned"}</dd></div>
