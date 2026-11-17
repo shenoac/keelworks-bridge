@@ -1058,7 +1058,7 @@ export default function DevelopersPage() {
                   <td className="px-5 py-4">
                     <div className="flex items-center gap-1.5 font-medium text-slate-950 dark:text-white">
                       <span>{developer.full_name ?? "Unknown developer"}</span>
-                      {isFormerMember(developer) && <span className="inline-flex rounded-full border border-rose-200 bg-rose-50 px-2 py-0.5 text-xs font-semibold text-rose-700 dark:border-rose-800/60 dark:bg-rose-950/50 dark:text-rose-300">Former member</span>}
+                      {isFormerMember(developer) && <span className="inline-flex whitespace-nowrap rounded-full border border-rose-200 bg-rose-50 px-2 py-0.5 text-xs font-semibold text-rose-700 dark:border-rose-800/60 dark:bg-rose-950/50 dark:text-rose-300">Former member</span>}
                       {developer.github_url && (
                         <a
                           href={developer.github_url}
@@ -1211,7 +1211,7 @@ export default function DevelopersPage() {
               <div>
                 <p className="text-xs font-semibold uppercase text-slate-500 dark:text-slate-400">Idle Days</p>
                 <p className="mt-1 text-sm font-bold text-amber-700 dark:text-amber-400">
-                  {selectedDeveloper.idleDays !== null ? `${selectedDeveloper.idleDays} idle days` : "Currently Assigned / Unavailable"}
+                  {selectedDeveloper.idleDays !== null ? `${selectedDeveloper.idleDays} idle days` : isFormerMember(selectedDeveloper) ? "Former member" : "Currently Assigned / Unavailable"}
                 </p>
               </div>
             </div>
@@ -1317,7 +1317,7 @@ export default function DevelopersPage() {
                   </dd>
                 </div>
               )}
-              <div><dt className="font-medium text-slate-500 dark:text-slate-400">Became Available</dt><dd className="mt-0.5 text-slate-950 dark:text-white">{selectedDeveloper.isAvailableForAllocation ? formatDisplayDate(selectedDeveloper.available_from || selectedDeveloper.joined_at || selectedDeveloper.created_at) : "Currently unavailable"}</dd></div>
+              <div><dt className="font-medium text-slate-500 dark:text-slate-400">Became Available</dt><dd className="mt-0.5 text-slate-950 dark:text-white">{isFormerMember(selectedDeveloper) ? "Not applicable (former member)" : selectedDeveloper.isAvailableForAllocation ? formatDisplayDate(selectedDeveloper.available_from || selectedDeveloper.joined_at || selectedDeveloper.created_at) : "Currently unavailable"}</dd></div>
               <div><dt className="font-medium text-slate-500 dark:text-slate-400">Original Joining Date</dt><dd className="mt-0.5 text-slate-950 dark:text-white">{formatDisplayDate(selectedDeveloper.joined_at || selectedDeveloper.created_at)}</dd></div>
               <div><dt className="font-medium text-slate-500 dark:text-slate-400">Skills</dt><dd className="mt-0.5 text-slate-950 dark:text-white">{formatSkills(selectedDeveloper.skills)}</dd></div>
               <div><dt className="font-medium text-slate-500 dark:text-slate-400">Project</dt><dd className="mt-0.5 text-slate-950 dark:text-white">{selectedDeveloper.project_name ?? "Unassigned"}</dd></div>
