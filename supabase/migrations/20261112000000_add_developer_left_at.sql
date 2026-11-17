@@ -13,8 +13,6 @@
 ALTER TABLE public.developers
 ADD COLUMN IF NOT EXISTS left_at date;
 
-DROP VIEW IF EXISTS public.developer_overview;
-
 CREATE OR REPLACE VIEW public.developer_overview AS
 WITH active_assignment AS (
   SELECT DISTINCT ON (pa.developer_id)
