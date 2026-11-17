@@ -1143,18 +1143,30 @@ export default function DevelopersPage() {
             </div>
 
             <dl className="mt-5 grid gap-3.5 text-sm">
-            <dd className="mt-0.5 text-slate-950 dark:text-white">
-  {selectedDeveloper.email ? (
-    <a
-      href={`mailto:${selectedDeveloper.email}`}
-      className="rounded text-blue-600 underline-offset-2 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 dark:text-blue-400"
-    >
-      {selectedDeveloper.email}
-    </a>
-  ) : (
-    "Not provided"
-  )}
-</dd>
+              
+            <div>
+              <dt className="font-medium text-slate-500 dark:text-slate-400">
+                Email
+              </dt>
+              <dd className="mt-0.5 text-slate-950 dark:text-white">
+                {selectedDeveloper.email ? (
+                  <a
+                    href={`mailto:${selectedDeveloper.email}`}
+                    className={[
+                      "rounded text-blue-600 underline-offset-2 hover:underline",
+                      "focus-visible:outline focus-visible:outline-2",
+                      "focus-visible:outline-offset-2 focus-visible:outline-blue-500",
+                      "dark:text-blue-400",
+                    ].join(" ")}
+                  >
+                    {selectedDeveloper.email}
+                  </a>
+                ) : (
+                  "Not provided"
+                )}
+              </dd>
+            </div>
+              
               {selectedDeveloper.github_url && (
                 <div>
                   <dt className="font-medium text-slate-500 dark:text-slate-400">
