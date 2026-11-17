@@ -89,6 +89,8 @@ To apply the developer directory schema alignment, dynamic availability derivati
   - **At least one assignment has a future end date** -> `Unavailable`
 - Resolves the date a developer became available (`available_from`) from the latest completed assignment end date (on or before today), falling back to `joined_at` or `created_at`.
 
+The `20261110000000_add_project_assignment_request_id.sql` migration adds an optional request link to project assignments and enforces that a linked request belongs to the same project. Administrators can create assignments from the developer directory; the assignment form supports optional request, start/end dates, and role.
+
 ## Development
 
 ### Start the Development Server

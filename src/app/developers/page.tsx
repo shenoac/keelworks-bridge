@@ -32,6 +32,24 @@ type CommentEntry = {
   created_at: string;
 };
 
+type AssignmentRecord = {
+  id: string;
+  developer_id: string;
+  project_id: string;
+  request_id: string | null;
+  start_date: string | null;
+  end_date: string | null;
+  role: string | null;
+  project_name: string | null;
+  request_title: string | null;
+};
+
+type AssignmentOptions = {
+  developers: Array<{ id: string; full_name: string | null }>;
+  projects: Array<{ id: string; name: string }>;
+  requests: Array<{ id: string; project_id: string; title: string | null; status: string }>;
+};
+
 function formatCommentTimestamp(dateStr: string): string {
   const date = new Date(dateStr);
   if (isNaN(date.getTime())) return dateStr;
@@ -71,6 +89,24 @@ export default function DevelopersPage() {
   const [commentsLoadError, setCommentsLoadError] = useState<string | null>(null);
   const [commentHistory, setCommentHistory] = useState<Record<string, CommentEntry[]>>({});
   const [archivedComments, setArchivedComments] = useState<CommentEntry[]>([]);
+  const [assignmentRecords, setAssignmentRecords] = useState<AssignmentRecord[]>([]);
+  const [assignmentOptions, setAssignmentOptions] = useState<AssignmentOptions>({
+    developers: [],
+    projects: [],
+    requests: [],
+  });
+  const [assignmentForm, setAssignmentForm] = useState({
+    developer_id: "",
+    project_id: "",
+    request_id: "",
+    start_date: new Date().toISOString().slice(0, 10),
+    end_date: "",
+    role: "",
+  });
+  const [assignmentFormError, setAssignmentFormError] = useState<string | null>(null);
+  const [assignmentOptionsError, setAssignmentOptionsError] = useState<string | null>(null);
+  const [assignmentLoadError, setAssignmentLoadError] = useState<string | null>(null);
+  const [savingAssignment, setSavingAssignment] = useState(false);
   const [commentStatus, setCommentStatus] = useState<{ developerId: string; message: string; isError: boolean } | null>(null);
   const [savingCommentId, setSavingCommentId] = useState<string | null>(null);
   const [newDeveloper, setNewDeveloper] = useState({
@@ -118,6 +154,22 @@ export default function DevelopersPage() {
               setIsAdmin(adminData.isAdmin === true);
               setCanDelete(adminData.canDelete === true);
               if (adminData.isAdmin === true) {
+                const assignmentOptionsResponse = await fetch("/api/assignments", {
+                  headers: { Authorization: `Bearer ${sessionData.session.access_token}` },
+                }).catch(() => null);
+                if (!assignmentOptionsResponse) {
+                  setAssignmentOptionsError("Network error loading assignment options.");
+                } else {
+                  const assignmentOptionsData = await assignmentOptionsResponse.json();
+                  if (!assignmentOptionsResponse.ok) {
+                    setAssignmentOptionsError(
+                      assignmentOptionsData.error ?? "Unable to load assignment options."
+                    );
+                  } else {
+                    setAssignmentOptions(assignmentOptionsData as AssignmentOptions);
+                  }
+                }
+
                 const commentsResponse = await fetch("/api/developers?includeComments=true", {
                   headers: { Authorization: `Bearer ${sessionData.session.access_token}` },
                 }).catch(() => null);
@@ -159,10 +211,12 @@ export default function DevelopersPage() {
 
             const assignQuery = await supabase
               .from("project_assignments")
-              .select("developer_id, project_id, end_date, created_at, projects(name)");
+              .select("id, developer_id, project_id, request_id, start_date, end_date, role, created_at, projects(name), requests(title)");
 
             // If project_assignments cannot be queried directly, rely on developer_overview fields
             if (assignQuery.error || !assignQuery.data) {
+              setAssignmentLoadError(assignQuery.error?.message ?? "Unable to load assignments.");
+              setAssignmentRecords([]);
               return baseDevelopers.map((ov) => {
                 const tableDev = devMap.get(ov.id);
                 return {
@@ -178,16 +232,44 @@ export default function DevelopersPage() {
             }
 
             type RawAssignmentRow = {
+              id: string;
               developer_id: string;
+              project_id: string;
+              request_id?: string | null;
+              start_date?: string | null;
               end_date?: string | null;
+              role?: string | null;
               projects?: { name?: string | null } | Array<{ name?: string | null }> | null;
+              requests?: { title?: string | null } | Array<{ title?: string | null }> | null;
             };
+
+            const rawAssignments = assignQuery.data as RawAssignmentRow[];
+            setAssignmentRecords(rawAssignments.map((assignment) => {
+              const project = Array.isArray(assignment.projects)
+                ? assignment.projects[0]
+                : assignment.projects;
+              const linkedRequest = Array.isArray(assignment.requests)
+                ? assignment.requests[0]
+                : assignment.requests;
+              return {
+                id: assignment.id,
+                developer_id: assignment.developer_id,
+                project_id: assignment.project_id,
+                request_id: assignment.request_id ?? null,
+                start_date: assignment.start_date ?? null,
+                end_date: assignment.end_date ?? null,
+                role: assignment.role ?? null,
+                project_name: project?.name ?? null,
+                request_title: linkedRequest?.title ?? null,
+              };
+            }));
+            setAssignmentLoadError(null);
 
             const devAssignmentsMap = new Map<
               string,
               Array<{ end_date?: string | null; project_name?: string | null }>
             >();
-            (assignQuery.data as RawAssignmentRow[]).forEach((a) => {
+            rawAssignments.forEach((a) => {
               if (!devAssignmentsMap.has(a.developer_id)) {
                 devAssignmentsMap.set(a.developer_id, []);
               }
@@ -496,6 +578,117 @@ export default function DevelopersPage() {
     }
 
     setSaving(false);
+  }
+
+  async function addAssignment(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setSavingAssignment(true);
+    setAssignmentFormError(null);
+
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData.session) {
+        setAssignmentFormError("Your session has expired. Please sign in again.");
+        return;
+      }
+
+      const response = await fetch("/api/assignments", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${sessionData.session.access_token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          ...assignmentForm,
+          request_id: assignmentForm.request_id || null,
+          end_date: assignmentForm.end_date || null,
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        setAssignmentFormError(result.error ?? "Unable to create assignment.");
+        return;
+      }
+
+      const selectedProject = assignmentOptions.projects.find(
+        (project) => project.id === assignmentForm.project_id
+      );
+      const selectedRequest = assignmentOptions.requests.find(
+        (request) => request.id === assignmentForm.request_id
+      );
+      const createdAssignment: AssignmentRecord = {
+        id: result.id,
+        developer_id: assignmentForm.developer_id,
+        project_id: assignmentForm.project_id,
+        request_id: assignmentForm.request_id || null,
+        start_date: assignmentForm.start_date || null,
+        end_date: assignmentForm.end_date || null,
+        role: assignmentForm.role.trim() || null,
+        project_name: selectedProject?.name ?? null,
+        request_title: selectedRequest?.title ?? null,
+      };
+      setAssignmentRecords((current) => [...current, createdAssignment]);
+
+      const developerAssignments = [
+        ...assignmentRecords.filter(
+          (assignment) => assignment.developer_id === createdAssignment.developer_id
+        ),
+        createdAssignment,
+      ];
+      const status = deriveDeveloperAvailability(developerAssignments);
+      const activeAssignment = developerAssignments.find((assignment) =>
+        isAssignmentActive(assignment)
+      );
+      const projectName =
+        status === "unavailable" ? activeAssignment?.project_name ?? null : null;
+      const developer = developers.find((item) => item.id === createdAssignment.developer_id);
+      const availableFrom =
+        status === "available" && developer
+          ? deriveLatestEndedDate(
+              developerAssignments,
+              developer.joined_at ?? developer.created_at
+            )?.toISOString() ?? developer.available_from ?? null
+          : null;
+
+      setDevelopers((current) =>
+        current.map((item) =>
+          item.id === createdAssignment.developer_id
+            ? { ...item, status, project_name: projectName, available_from: availableFrom }
+            : item
+        )
+      );
+      setSelectedDeveloper((current) => {
+        if (!current || current.id !== createdAssignment.developer_id) return current;
+        const updated = {
+          ...current,
+          status,
+          project_name: projectName,
+          available_from: availableFrom,
+        };
+        const available = isAvailableForAllocation(updated);
+        return {
+          ...updated,
+          availableDate: getDeveloperAvailableDate(updated),
+          isAvailableForAllocation: available,
+          idleDays: calculateIdleDays(updated),
+          allocationPriority: available ? current.allocationPriority : undefined,
+        };
+      });
+
+      setAssignmentForm({
+        developer_id: "",
+        project_id: "",
+        request_id: "",
+        start_date: new Date().toISOString().slice(0, 10),
+        end_date: "",
+        role: "",
+      });
+    } catch (requestError) {
+      console.error("Failed to create project assignment:", requestError);
+      setAssignmentFormError("Network error creating assignment.");
+    } finally {
+      setSavingAssignment(false);
+    }
   }
 
   async function saveComments(developer: Developer) {
@@ -899,6 +1092,105 @@ export default function DevelopersPage() {
               {formError && <p className="text-sm text-red-700 dark:text-red-300" role="alert">{formError}</p>}
             </div>
           </form>
+        </section>
+      )}
+
+      {isAdmin && !isDemoMode && (
+        <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900" aria-labelledby="create-assignment-title">
+          <h2 id="create-assignment-title" className="text-lg font-semibold text-slate-950 dark:text-white">Assign developer to project</h2>
+          <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">A request is optional. Assignments can be created independently of the request queue.</p>
+          {assignmentOptionsError ? (
+            <p className="mt-4 text-sm text-red-700 dark:text-red-300" role="alert">{assignmentOptionsError}</p>
+          ) : (
+            <form className="mt-4 grid gap-4 md:grid-cols-2 lg:grid-cols-3" onSubmit={addAssignment}>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">
+                Developer
+                <select
+                  required
+                  value={assignmentForm.developer_id}
+                  onChange={(event) => setAssignmentForm({ ...assignmentForm, developer_id: event.target.value })}
+                  className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+                >
+                  <option value="">Select a developer</option>
+                  {assignmentOptions.developers.map((developer) => (
+                    <option key={developer.id} value={developer.id}>{developer.full_name ?? "Unnamed developer"}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">
+                Project
+                <select
+                  required
+                  value={assignmentForm.project_id}
+                  onChange={(event) => {
+                    setAssignmentForm({ ...assignmentForm, project_id: event.target.value, request_id: "" });
+                  }}
+                  className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+                >
+                  <option value="">Select a project</option>
+                  {assignmentOptions.projects.map((project) => (
+                    <option key={project.id} value={project.id}>{project.name}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">
+                Request (optional)
+                <select
+                  value={assignmentForm.request_id}
+                  onChange={(event) => setAssignmentForm({ ...assignmentForm, request_id: event.target.value })}
+                  disabled={!assignmentForm.project_id}
+                  className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-white disabled:opacity-60"
+                >
+                  <option value="">No request</option>
+                  {assignmentOptions.requests
+                    .filter((request) => request.project_id === assignmentForm.project_id)
+                    .map((request) => (
+                      <option key={request.id} value={request.id}>
+                        {request.title || "Untitled request"} ({request.status})
+                      </option>
+                    ))}
+                </select>
+              </label>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">
+                Start date
+                <input
+                  type="date"
+                  value={assignmentForm.start_date}
+                  onChange={(event) => setAssignmentForm({ ...assignmentForm, start_date: event.target.value })}
+                  className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+                />
+              </label>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">
+                End date (optional)
+                <input
+                  type="date"
+                  min={assignmentForm.start_date || undefined}
+                  value={assignmentForm.end_date}
+                  onChange={(event) => setAssignmentForm({ ...assignmentForm, end_date: event.target.value })}
+                  className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+                />
+              </label>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">
+                Role (optional)
+                <input
+                  value={assignmentForm.role}
+                  onChange={(event) => setAssignmentForm({ ...assignmentForm, role: event.target.value })}
+                  placeholder="e.g. Frontend developer"
+                  className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+                />
+              </label>
+              <div className="flex items-center gap-4 md:col-span-2 lg:col-span-3">
+                <button
+                  type="submit"
+                  disabled={savingAssignment || !assignmentOptions.developers.length || !assignmentOptions.projects.length}
+                  className="rounded-lg bg-slate-950 px-4 py-2.5 text-sm font-medium text-white disabled:opacity-60 dark:bg-white dark:text-slate-950"
+                >
+                  {savingAssignment ? "Creating..." : "Create assignment"}
+                </button>
+                {assignmentFormError && <p className="text-sm text-red-700 dark:text-red-300" role="alert">{assignmentFormError}</p>}
+              </div>
+            </form>
+          )}
         </section>
       )}
 
@@ -1360,6 +1652,38 @@ export default function DevelopersPage() {
               {selectedDeveloper.location && <div><dt className="font-medium text-slate-500 dark:text-slate-400">Location</dt><dd className="mt-0.5 text-slate-950 dark:text-white">{selectedDeveloper.location}</dd></div>}
               {selectedDeveloper.availability_hours !== undefined && selectedDeveloper.availability_hours !== null && <div><dt className="font-medium text-slate-500 dark:text-slate-400">Weekly Availability</dt><dd className="mt-0.5 text-slate-950 dark:text-white">{selectedDeveloper.availability_hours} hours/week</dd></div>}
             </dl>
+            <section className="mt-6 border-t border-slate-200 pt-5 dark:border-slate-700" aria-labelledby="project-assignments-title">
+              <h3 id="project-assignments-title" className="text-lg font-semibold text-slate-950 dark:text-white">Project assignments</h3>
+              {assignmentLoadError ? (
+                <p className="mt-2 text-sm text-red-700 dark:text-red-300" role="alert">
+                  Unable to load assignments: {assignmentLoadError}
+                </p>
+              ) : (
+                <ul className="mt-3 space-y-3">
+                  {assignmentRecords
+                    .filter((assignment) => assignment.developer_id === selectedDeveloper.id)
+                    .map((assignment) => (
+                      <li key={assignment.id} className="rounded-lg border border-slate-200 p-3 dark:border-slate-700">
+                        <p className="font-medium text-slate-950 dark:text-white">{assignment.project_name ?? "Project"}</p>
+                        {assignment.role && <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">Role: {assignment.role}</p>}
+                        <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
+                          Start: {formatDisplayDate(assignment.start_date)}
+                          {" · "}
+                          End: {assignment.end_date ? formatDisplayDate(assignment.end_date) : "Ongoing"}
+                        </p>
+                        {assignment.request_id && (
+                          <p className="mt-1 text-sm text-indigo-700 dark:text-indigo-300">
+                            Linked to request: {assignment.request_title || assignment.request_id}
+                          </p>
+                        )}
+                      </li>
+                    ))}
+                  {assignmentRecords.every((assignment) => assignment.developer_id !== selectedDeveloper.id) && (
+                    <li className="text-sm text-slate-500 dark:text-slate-400">No project assignments recorded.</li>
+                  )}
+                </ul>
+              )}
+            </section>
             {isAdmin && (
               <section className="mt-6 border-t border-slate-200 pt-5 dark:border-slate-700" aria-labelledby="private-notes-title">
                 <h3 id="private-notes-title" className="text-lg font-semibold text-slate-950 dark:text-white">Private administrator notes</h3>
