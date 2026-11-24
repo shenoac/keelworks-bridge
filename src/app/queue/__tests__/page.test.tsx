@@ -255,4 +255,48 @@ describe("QueuePage smoke test", () => {
     const ownerCell = within(dataRow).getAllByRole("cell")[4];
     expect(ownerCell).toHaveTextContent("—");
   });
+  it("displays status badges with the correct colors", async () => {
+  mockAuthenticatedUser("admin@keelworks.org");
+
+  mockPublicRequests([
+    {
+      id: "1",
+      project_name: "Pending Project",
+      owner: null,
+      title: "Request A",
+      status: "pending",
+      target_start_date: null,
+      created_at: "2024-01-01T00:00:00Z",
+      developer_names: null,
+    },
+    {
+      id: "2",
+      project_name: "Completed Project",
+      owner: null,
+      title: "Request B",
+      status: "completed",
+      target_start_date: null,
+      created_at: "2024-01-02T00:00:00Z",
+      developer_names: null,
+    },
+  ]);
+
+  render(<QueuePage />);
+
+  await waitFor(() => {
+    expect(screen.getByText("Pending Project")).toBeInTheDocument();
+  });
+
+ const rows = screen.getAllByRole("row");
+
+expect(within(rows[1]).getByText("pending")).toHaveClass(
+  "bg-amber-100",
+  "text-amber-800"
+);
+
+expect(within(rows[2]).getByText("completed")).toHaveClass(
+  "bg-green-100",
+  "text-green-800"
+);
+});
 });
