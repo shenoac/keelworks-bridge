@@ -1338,8 +1338,46 @@ export default function DevelopersPage() {
                 <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Skills</th>
                 <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Project</th>
                 <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Became Available</th>
-                <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Idle Days</th>
-                <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Allocation Priority</th>
+                <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  <span className="group relative inline-flex items-center gap-1">
+                    Idle Days
+                    <button
+                      type="button"
+                      aria-label="More information about Idle Days"
+                      aria-describedby="idle-days-tooltip"
+                      className="cursor-help text-slate-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500"
+                    >
+                      ⓘ
+                    </button>
+                    <span
+                      id="idle-days-tooltip"
+                      role="tooltip"
+                      className="pointer-events-none absolute left-0 top-full z-20 mt-2 w-64 rounded-md bg-slate-900 px-3 py-2 text-left text-xs font-normal normal-case tracking-normal text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 dark:bg-slate-100 dark:text-slate-900"
+                    >
+                     Calendar days since the developer&apos;s recorded availability date, using the joining or creation date as a fallback.
+                    </span>
+                  </span>
+                </th>
+                <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  <span className="group relative inline">
+                    Allocation Priority
+                    <button
+                      type="button"
+                      aria-label="More information about Allocation Priority"
+                      aria-describedby="allocation-priority-tooltip"
+                      className="ml-1 inline-flex align-middle cursor-help text-slate-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500"
+                    >
+                      ⓘ
+                    </button>
+                    <span
+                      id="allocation-priority-tooltip"
+                      role="tooltip"
+                      className="pointer-events-none absolute left-0 top-full z-20 mt-2 w-64 rounded-md bg-slate-900 px-3 py-2 text-left text-xs font-normal normal-case tracking-normal text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 dark:bg-slate-100 dark:text-slate-900"
+                    >
+                      Rank among available developers, ordered by idle days from highest to lowest.
+                    </span>
+                  </span>
+                </th>
                 <th className="px-5 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">Action</th>
               </tr>
             </thead>
