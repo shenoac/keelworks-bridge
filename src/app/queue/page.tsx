@@ -27,6 +27,23 @@ function formatDate(iso: string) {
   }).format(d);
 }
 
+function getStatusBadgeClass(status: string) {
+  switch (status.toLowerCase().trim()) {
+    case "new":
+      return "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300";
+    case "sourcing":
+      return "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200";
+    case "matching":
+      return "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300";
+    case "onboarding":
+      return "bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300";
+    case "filled":
+      return "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300";
+    default:
+      return "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200";
+  }
+}
+
 export default function QueuePage() {
   const router = useRouter();
 
@@ -189,7 +206,7 @@ export default function QueuePage() {
                   </td>
                   <td className="px-5 py-4 text-slate-700 dark:text-slate-200">{r.title}</td>
                   <td className="whitespace-nowrap px-5 py-4">
-                    <span className="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700 dark:bg-slate-800 dark:text-slate-200">{r.status}</span>
+                    <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${getStatusBadgeClass(r.status)}`}>{r.status}</span>
                   </td>
                   <td className="whitespace-nowrap px-5 py-4 text-slate-600 dark:text-slate-300">
                     {r.owner ?? "—"}
