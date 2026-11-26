@@ -78,7 +78,7 @@ describe("QueuePage smoke test", () => {
         owner: "alice@example.com",
         email: "alice@example.com",
         title: "Request A",
-        status: "pending",
+        status: "new",
         target_start_date: null,
         created_at: "2024-01-01T00:00:00Z",
         developer_names: "Dev1",
@@ -89,7 +89,7 @@ describe("QueuePage smoke test", () => {
         owner: null,
         email: null,
         title: "Request B",
-        status: "completed",
+        status: "filled",
         target_start_date: null,
         created_at: "2024-01-02T00:00:00Z",
         developer_names: null,
@@ -100,7 +100,7 @@ describe("QueuePage smoke test", () => {
         owner: "charlie@example.com",
         email: "",
         title: "Request C",
-        status: "pending",
+        status: "new",
         target_start_date: null,
         created_at: "2024-01-03T00:00:00Z",
         developer_names: "Dev2",
@@ -146,7 +146,7 @@ describe("QueuePage smoke test", () => {
     expect(screen.getByText(/showing 3 of 3 requests/i)).toBeInTheDocument();
 
     const filterSelect = screen.getByRole("combobox");
-    await user.selectOptions(filterSelect, "completed");
+    await user.selectOptions(filterSelect, "filled");
 
     await waitFor(() => {
       expect(screen.getByText(/showing 1 of 3 requests/i)).toBeInTheDocument();
@@ -156,7 +156,7 @@ describe("QueuePage smoke test", () => {
     expect(screen.getByText("Project Beta")).toBeInTheDocument();
     expect(screen.queryByText("Project Gamma")).not.toBeInTheDocument();
 
-    await user.selectOptions(filterSelect, "pending");
+    await user.selectOptions(filterSelect, "new");
 
     await waitFor(() => {
       expect(screen.getByText(/showing 2 of 3 requests/i)).toBeInTheDocument();
@@ -176,7 +176,7 @@ describe("QueuePage smoke test", () => {
         project_name: "Project Alpha",
         owner: "alice@example.com",
         title: "Request A",
-        status: "pending",
+        status: "new",
         target_start_date: null,
         created_at: "2024-01-01T00:00:00Z",
         developer_names: "Dev1",
@@ -206,7 +206,7 @@ describe("QueuePage smoke test", () => {
         project_name: "Project Beta",
         owner: null,
         title: "Request B",
-        status: "completed",
+        status: "filled",
         target_start_date: null,
         created_at: "2024-01-01T00:00:00Z",
         developer_names: null,
@@ -234,7 +234,7 @@ describe("QueuePage smoke test", () => {
         owner: null,
         email: null,
         title: "Request",
-        status: "pending",
+        status: "new",
         target_start_date: null,
         created_at: "2024-01-01T00:00:00Z",
         developer_names: null,
@@ -255,4 +255,40 @@ describe("QueuePage smoke test", () => {
     const ownerCell = within(dataRow).getAllByRole("cell")[4];
     expect(ownerCell).toHaveTextContent("—");
   });
+  it("styles the five real request statuses and unknown values", async () => {
+    mockAuthenticatedUser("admin@keelworks.org");
+
+    const statuses = ["new", "sourcing", "matching", "onboarding", "filled", "unknown"];
+    mockPublicRequests(
+      statuses.map((status, index) => ({
+        id: String(index + 1),
+        project_name: `Project ${index + 1}`,
+        owner: null,
+        title: `Request ${index + 1}`,
+        status,
+        target_start_date: null,
+        created_at: `2024-01-0${index + 1}T00:00:00Z`,
+        developer_names: null,
+      }))
+    );
+
+    render(<QueuePage />);
+    await waitFor(() => {
+      expect(screen.getByText("Project 1")).toBeInTheDocument();
+    });
+
+    const expectedClasses: Record<string, string[]> = {
+      new: ["bg-blue-100", "text-blue-800"],
+      sourcing: ["bg-slate-100", "text-slate-700"],
+      matching: ["bg-amber-100", "text-amber-800"],
+      onboarding: ["bg-purple-100", "text-purple-800"],
+      filled: ["bg-green-100", "text-green-800"],
+      unknown: ["bg-slate-100", "text-slate-700"],
+    };
+    const rows = screen.getAllByRole("row");
+    statuses.forEach((status, index) => {
+      expect(within(rows[index + 1]).getByText(status)).toHaveClass(...expectedClasses[status]);
+    });
+  });
+
 });
